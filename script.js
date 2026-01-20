@@ -5,8 +5,7 @@
 // Configuration
 const CONFIG = {
     scriptUrl: 'https://script.google.com/macros/s/AKfycbwsGu0uuWKp0t4fwuC0zyEuPHzMaMMrJZOte6FTrRIdZL7MVLkS5kGm3mhU_8f1nCD3/exec',
-    // UPDATE THIS: Set to your Cloudflare Worker URL after deployment
-    uploadUrl: 'https://wellbound-signature-upload.YOUR-SUBDOMAIN.workers.dev',
+    uploadUrl: 'https://wellbound-signature-upload.support-1e5.workers.dev',
     r2PublicBase: 'https://pub-d7fda00c74254211bfe47adcb51427b0.r2.dev'
 };
 
