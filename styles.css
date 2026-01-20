@@ -444,7 +444,7 @@ input:hover:not(:focus) {
     height: 56px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--accent-primary);
+    border: 2px solid #561640;
     background: var(--bg-elevated);
 }
 
@@ -539,7 +539,7 @@ input:hover:not(:focus) {
     height: 56px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--accent-primary);
+    border: 2px solid #561640;
     background: var(--bg-elevated);
 }
 
