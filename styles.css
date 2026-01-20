@@ -18,9 +18,9 @@
     --text-primary: #f0f0f5;
     --text-secondary: #a0a0b0;
     --text-muted: #707080;
-    --accent-primary: #561640;
-    --accent-light: #7a2a5a;
-    --accent-glow: rgba(86, 22, 64, 0.3);
+    --accent-primary: #0080ff;
+    --accent-light: #00aaff;
+    --accent-glow: rgba(0, 140, 255, 0.4);
     --success: #22c55e;
     --error: #ef4444;
     --warning: #f59e0b;
