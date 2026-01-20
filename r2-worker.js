@@ -54,11 +54,10 @@ export default {
         });
       }
 
-      // Generate unique filename
+      // Generate unique filename (always use .jpg since we compress to JPEG)
       const timestamp = Date.now();
       const randomId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-      const extension = file.name.split(".").pop() || "png";
-      const filename = `signature-photos/${timestamp}_${randomId}.${extension}`;
+      const filename = `signature-photos/${timestamp}_${randomId}.jpg`;
 
       // Upload to R2
       const arrayBuffer = await file.arrayBuffer();

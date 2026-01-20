@@ -66,14 +66,17 @@ function createCircularImage(imgSrc, callback) {
 function handleImageUpload(event) {
     const file = event.target.files[0];
     if (file) {
-        // Store the file for later upload
-        currentImageFile = file;
         uploadedR2Url = null;  // Reset any previous URL
         
         const reader = new FileReader();
         reader.onload = function(e) {
             uploadedImageData = e.target.result;
             hasImage = true;
+            
+            // Compress and prepare the image for upload
+            compressImageForUpload(e.target.result, function(compressedBlob) {
+                currentImageFile = compressedBlob;
+            });
             
             createCircularImage(uploadedImageData, function(circularData) {
                 circularImageData = circularData;
@@ -90,6 +93,53 @@ function handleImageUpload(event) {
         };
         reader.readAsDataURL(file);
     }
+}
+
+// Compress and convert image to JPEG for faster loading
+function compressImageForUpload(imgSrc, callback) {
+    const img = new Image();
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        
+        // Max dimensions for profile photo (keeps it reasonable)
+        const maxSize = 400;
+        let width = img.width;
+        let height = img.height;
+        
+        // Scale down if larger than maxSize
+        if (width > height) {
+            if (width > maxSize) {
+                height = Math.round((height * maxSize) / width);
+                width = maxSize;
+            }
+        } else {
+            if (height > maxSize) {
+                width = Math.round((width * maxSize) / height);
+                height = maxSize;
+            }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Fill with white background (for JPEG transparency)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Draw the image
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to JPEG with 85% quality (good balance of size/quality)
+        canvas.toBlob(function(blob) {
+            // Create a new file with .jpg extension
+            const compressedFile = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
+            console.log(`Image compressed: ${Math.round(blob.size / 1024)}KB`);
+            callback(compressedFile);
+        }, 'image/jpeg', 0.85);
+    };
+    img.src = imgSrc;
 }
 
 // Upload image to Cloudflare R2
