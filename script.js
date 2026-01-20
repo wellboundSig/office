@@ -4,7 +4,10 @@
 
 // Configuration
 const CONFIG = {
-    scriptUrl: 'https://script.google.com/macros/s/AKfycbwsGu0uuWKp0t4fwuC0zyEuPHzMaMMrJZOte6FTrRIdZL7MVLkS5kGm3mhU_8f1nCD3/exec'
+    scriptUrl: 'https://script.google.com/macros/s/AKfycbwsGu0uuWKp0t4fwuC0zyEuPHzMaMMrJZOte6FTrRIdZL7MVLkS5kGm3mhU_8f1nCD3/exec',
+    // UPDATE THIS: Set to your Cloudflare Worker URL after deployment
+    uploadUrl: 'https://wellbound-signature-upload.YOUR-SUBDOMAIN.workers.dev',
+    r2PublicBase: 'https://pub-d7fda00c74254211bfe47adcb51427b0.r2.dev'
 };
 
 // State
@@ -12,6 +15,9 @@ let uploadedImageData = null;
 let circularImageData = null;
 let hasImage = false;
 let employeesCache = [];
+let uploadedR2Url = null;  // Stores the R2 URL after upload
+let currentImageFile = null;  // Stores the current image file for upload
+let isUploading = false;
 
 // ========================================
 // Image Handling
@@ -61,6 +67,10 @@ function createCircularImage(imgSrc, callback) {
 function handleImageUpload(event) {
     const file = event.target.files[0];
     if (file) {
+        // Store the file for later upload
+        currentImageFile = file;
+        uploadedR2Url = null;  // Reset any previous URL
+        
         const reader = new FileReader();
         reader.onload = function(e) {
             uploadedImageData = e.target.result;
@@ -80,6 +90,44 @@ function handleImageUpload(event) {
             });
         };
         reader.readAsDataURL(file);
+    }
+}
+
+// Upload image to Cloudflare R2
+async function uploadImageToR2() {
+    if (!currentImageFile) {
+        return null;
+    }
+    
+    if (uploadedR2Url) {
+        // Already uploaded
+        return uploadedR2Url;
+    }
+    
+    isUploading = true;
+    
+    try {
+        const formData = new FormData();
+        formData.append('image', currentImageFile);
+        
+        const response = await fetch(CONFIG.uploadUrl, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (result.success && result.url) {
+            uploadedR2Url = result.url;
+            isUploading = false;
+            return result.url;
+        } else {
+            throw new Error(result.error || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('R2 Upload error:', error);
+        isUploading = false;
+        throw error;
     }
 }
 
@@ -272,29 +320,54 @@ function openAddToDatabase() {
     }
     
     document.getElementById('modalOverlay').classList.add('active');
-    document.getElementById('imageUrl').value = '';
     document.getElementById('modalLoader').classList.remove('active');
+    
+    // Update modal content based on whether there's an image
+    const modalContent = document.getElementById('modalContent');
+    const uploadStatus = document.getElementById('uploadStatus');
+    
+    if (hasImage && currentImageFile) {
+        if (uploadStatus) {
+            uploadStatus.innerHTML = `<i class="fa-solid fa-image"></i> Image ready: <strong>${currentImageFile.name}</strong>`;
+            uploadStatus.style.display = 'block';
+        }
+    } else {
+        if (uploadStatus) {
+            uploadStatus.innerHTML = `<i class="fa-solid fa-info-circle"></i> No image uploaded - will be added without photo`;
+            uploadStatus.style.display = 'block';
+        }
+    }
 }
 
 function closeModal() {
     document.getElementById('modalOverlay').classList.remove('active');
 }
 
-async function addToDatabase(withImage) {
+async function addToDatabase() {
     const name = document.getElementById('workerName').value;
     const title = document.getElementById('jobTitle').value;
     const phone = document.getElementById('phoneNumber').value;
     const ext = document.getElementById('extension').value;
     const email = document.getElementById('email').value;
-    const imageUrl = document.getElementById('imageUrl').value.trim();
-    
-    if (withImage && !imageUrl) {
-        showToast('Please enter an image URL or click "Send without Image"', true);
-        return;
-    }
     
     // Show loader
     document.getElementById('modalLoader').classList.add('active');
+    const loaderText = document.querySelector('#modalLoader p');
+    
+    let imageUrl = '';
+    
+    // If there's an image, upload it to R2 first
+    if (hasImage && currentImageFile) {
+        try {
+            if (loaderText) loaderText.textContent = 'Uploading image to cloud...';
+            imageUrl = await uploadImageToR2();
+            if (loaderText) loaderText.textContent = 'Adding to database...';
+        } catch (error) {
+            console.error('Image upload failed:', error);
+            showToast('Image upload failed. Adding without image.', true);
+            imageUrl = '';
+        }
+    }
     
     const data = {
         action: 'add',
@@ -303,7 +376,7 @@ async function addToDatabase(withImage) {
         phone: phone,
         extension: ext,
         email: email,
-        imageUrl: withImage ? imageUrl : ''
+        imageUrl: imageUrl
     };
     
     try {
@@ -319,6 +392,10 @@ async function addToDatabase(withImage) {
         // Since no-cors doesn't return response, assume success
         showToast('Employee added to database!');
         closeModal();
+        
+        // Reset image state after successful add
+        uploadedR2Url = null;
+        currentImageFile = null;
     } catch (error) {
         console.error('Error:', error);
         showToast('Failed to add to database. Check console.', true);

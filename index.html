@@ -109,19 +109,15 @@
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
-            <div class="modal-body">
-                <p>To add this employee to the database, please provide a profile image URL.</p>
-                <div class="form-group">
-                    <label for="imageUrl">Profile Image URL</label>
-                    <input type="text" id="imageUrl" placeholder="https://example.com/image.jpg">
-                    <small class="input-hint">Direct link to a hosted image (Google Drive, Imgur, etc.)</small>
-                </div>
+            <div class="modal-body" id="modalContent">
+                <p>Add this employee's signature to the database. The profile image will be automatically uploaded to cloud storage.</p>
+                <div id="uploadStatus" class="upload-status" style="display: none;"></div>
                 <div class="modal-actions">
-                    <button class="btn btn-primary" onclick="addToDatabase(true)" id="addWithImageBtn">
-                        <i class="fa-solid fa-check"></i> Add with Image
+                    <button class="btn btn-primary" onclick="addToDatabase()" id="addToDbBtn">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Add to Database
                     </button>
-                    <button class="btn btn-secondary" onclick="addToDatabase(false)" id="addWithoutImageBtn">
-                        <i class="fa-solid fa-forward"></i> Send without Image
+                    <button class="btn btn-secondary" onclick="closeModal()">
+                        <i class="fa-solid fa-xmark"></i> Cancel
                     </button>
                 </div>
             </div>
