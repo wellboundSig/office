@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Directory - Wellbound</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-bar">
+            <div class="nav-brand">
+                <img src="logo 2.png" alt="Wellbound" class="nav-logo">
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">
+                    <i class="fa-solid fa-pen-to-square"></i> Create
+                </a>
+                <a href="list.html" class="nav-link active">
+                    <i class="fa-solid fa-users"></i> Directory
+                </a>
+                <a href="search.html" class="nav-link">
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </a>
+            </div>
+        </nav>
+        
+        <div class="page-header">
+            <h1><i class="fa-solid fa-address-book"></i> Employee Directory</h1>
+            <p>All employees in the database</p>
+        </div>
+        
+        <div class="list-controls">
+            <div class="filter-input">
+                <i class="fa-solid fa-filter"></i>
+                <input type="text" id="filterInput" placeholder="Filter by name or title..." onkeyup="filterList()">
+            </div>
+            <button class="btn btn-secondary" onclick="loadEmployees()">
+                <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
+        </div>
+        
+        <div class="loader" id="listLoader">
+            <div class="spinner"></div>
+            <p>Loading employees...</p>
+        </div>
+        
+        <div class="employee-grid" id="employeeGrid">
+            <!-- Employee cards populated by JS -->
+        </div>
+        
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <i class="fa-solid fa-users-slash"></i>
+            <h3>No employees found</h3>
+            <p>The database is empty or no results match your filter.</p>
+        </div>
+    </div>
+    
+    <!-- Signature Modal -->
+    <div class="modal-overlay" id="signatureModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-signature"></i> <span id="modalEmployeeName">Employee</span>'s Signature</h3>
+                <button class="modal-close" onclick="closeSignatureModal()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="signature-preview" id="modalSignaturePreview">
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="copyModalSignature()">
+                        <i class="fa-solid fa-copy"></i> Copy Signature
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <i class="fa-solid fa-check"></i>
+        <span id="toastMessage">Success!</span>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', loadEmployees);
+    </script>
+</body>
+</html>

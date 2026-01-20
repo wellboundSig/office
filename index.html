@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wellbound Email Signature Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-bar">
+            <div class="nav-brand">
+                <img src="logo 2.png" alt="Wellbound" class="nav-logo">
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link active">
+                    <i class="fa-solid fa-pen-to-square"></i> Create
+                </a>
+                <a href="list.html" class="nav-link">
+                    <i class="fa-solid fa-users"></i> Directory
+                </a>
+                <a href="search.html" class="nav-link">
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </a>
+            </div>
+        </nav>
+        
+        <div class="main-layout">
+            <div class="form-section">
+                <h2><i class="fa-solid fa-user-plus"></i> Employee Information</h2>
+                
+                <div class="form-group">
+                    <label>Profile Image</label>
+                    <div class="image-upload" onclick="document.getElementById('imageInput').click()">
+                        <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
+                        <img id="imagePreview" class="image-preview">
+                        <div id="uploadPlaceholder">
+                            <div class="upload-icon"><i class="fa-solid fa-camera"></i></div>
+                            <div class="upload-text">Click to upload profile photo<br><small>(1" x 1", circular crop)</small></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="workerName">Worker Name *</label>
+                    <input type="text" id="workerName" placeholder="Full Name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="jobTitle">Job Title *</label>
+                    <input type="text" id="jobTitle" placeholder="Job Title" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phoneNumber">Phone Number</label>
+                    <input type="tel" id="phoneNumber" value="718.400.WELL (9355)" placeholder="718.400.WELL (9355)">
+                </div>
+                
+                <div class="form-group">
+                    <label for="extension">Extension Number *</label>
+                    <input type="text" id="extension" placeholder="Ext #" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="fax">Fax Number</label>
+                    <input type="tel" id="fax" value="718.766.2109" placeholder="718.766.2109">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" placeholder="email@wellboundhc.com" required>
+                </div>
+                
+                <button class="btn btn-primary generate-btn" onclick="generateSignature()">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Signature
+                </button>
+            </div>
+            
+            <div class="preview-section">
+                <h2><i class="fa-solid fa-eye"></i> Signature Preview</h2>
+                
+                <div class="action-buttons">
+                    <button class="btn btn-primary" onclick="copySignature()" id="copyBtn">
+                        <i class="fa-solid fa-copy"></i> Copy Signature
+                    </button>
+                    <button class="btn btn-accent" onclick="openAddToDatabase()" id="addDbBtn">
+                        <i class="fa-solid fa-database"></i> Add to Database
+                    </button>
+                </div>
+                
+                <div class="signature-preview" id="signaturePreview">
+                    <p class="preview-placeholder">
+                        <i class="fa-solid fa-signature"></i><br>
+                        Fill in the form and click "Generate Signature" to preview
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add to Database Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-database"></i> Add to Database</h3>
+                <button class="modal-close" onclick="closeModal()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>To add this employee to the database, please provide a profile image URL.</p>
+                <div class="form-group">
+                    <label for="imageUrl">Profile Image URL</label>
+                    <input type="text" id="imageUrl" placeholder="https://example.com/image.jpg">
+                    <small class="input-hint">Direct link to a hosted image (Google Drive, Imgur, etc.)</small>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" onclick="addToDatabase(true)" id="addWithImageBtn">
+                        <i class="fa-solid fa-check"></i> Add with Image
+                    </button>
+                    <button class="btn btn-secondary" onclick="addToDatabase(false)" id="addWithoutImageBtn">
+                        <i class="fa-solid fa-forward"></i> Send without Image
+                    </button>
+                </div>
+            </div>
+            <div class="modal-loader" id="modalLoader">
+                <div class="spinner"></div>
+                <p>Adding to database...</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <i class="fa-solid fa-check"></i>
+        <span id="toastMessage">Success!</span>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
