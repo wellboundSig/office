@@ -26,8 +26,9 @@
 
 // Configuration
 const SHEET_NAME = 'Employees';
+const EXTENSIONS_SHEET_NAME = 'Extensions';
 
-// Column indices (0-based)
+// Column indices (0-based) for Employees sheet
 const COLS = {
   NAME: 0,       // A - Worker Name
   TITLE: 1,      // B - Job Title
@@ -35,6 +36,15 @@ const COLS = {
   EXTENSION: 3,  // D - Extension Number
   EMAIL: 4,      // E - Email
   IMAGE_URL: 5   // F - Profile Image URL
+};
+
+// Column indices (0-based) for Extensions sheet
+const EXT_COLS = {
+  EXTENSION: 0,           // A - extension
+  CALLER_NAME: 1,         // B - effective_caller_id_name
+  OUTBOUND_NAME: 2,       // C - outbound_caller_id_name
+  ENABLED: 3,             // D - enabled
+  DESCRIPTION: 4          // E - description
 };
 
 /**
@@ -50,6 +60,8 @@ function doGet(e) {
       const firstName = (e.parameter.firstName || '').toLowerCase().trim();
       const lastName = (e.parameter.lastName || '').toLowerCase().trim();
       return handleSearch(firstName, lastName);
+    } else if (action === 'extensions') {
+      return handleListExtensions();
     }
     
     return jsonResponse({ error: 'Invalid action' });
@@ -199,6 +211,47 @@ function getSheet() {
   }
   
   return sheet;
+}
+
+/**
+ * Get the extensions sheet
+ */
+function getExtensionsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  return ss.getSheetByName(EXTENSIONS_SHEET_NAME);
+}
+
+/**
+ * List all extensions
+ */
+function handleListExtensions() {
+  const sheet = getExtensionsSheet();
+  
+  if (!sheet) {
+    return jsonResponse({ error: 'Extensions sheet not found' });
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  
+  // Skip header row
+  const extensions = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    // Only include rows with an extension number and that are enabled
+    if (row[EXT_COLS.EXTENSION] && row[EXT_COLS.ENABLED] === true) {
+      extensions.push({
+        extension: String(row[EXT_COLS.EXTENSION]),
+        name: row[EXT_COLS.CALLER_NAME] || '',
+        outboundName: row[EXT_COLS.OUTBOUND_NAME] || '',
+        description: row[EXT_COLS.DESCRIPTION] || ''
+      });
+    }
+  }
+  
+  // Sort by extension number
+  extensions.sort((a, b) => parseInt(a.extension) - parseInt(b.extension));
+  
+  return jsonResponse(extensions);
 }
 
 /**

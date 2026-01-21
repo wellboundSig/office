@@ -37,9 +37,14 @@
                 <i class="fa-solid fa-filter"></i>
                 <input type="text" id="filterInput" placeholder="Filter by name or title..." onkeyup="filterList()">
             </div>
-            <button class="btn btn-secondary" onclick="loadEmployees()">
-                <i class="fa-solid fa-arrows-rotate"></i> Refresh
-            </button>
+            <div class="control-buttons">
+                <button class="btn btn-primary" onclick="openExtensionsModal()" title="Phone Extensions">
+                    <i class="fa-solid fa-phone"></i> Extensions
+                </button>
+                <button class="btn btn-secondary" onclick="loadEmployees()">
+                    <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                </button>
+            </div>
         </div>
         
         <div class="loader" id="listLoader">
@@ -74,6 +79,35 @@
                     <button class="btn btn-primary" onclick="copyModalSignature()">
                         <i class="fa-solid fa-copy"></i> Copy Signature
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Extensions Directory Modal -->
+    <div class="modal-overlay" id="extensionsModal">
+        <div class="modal modal-lg">
+            <div class="modal-header">
+                <h3><i class="fa-solid fa-phone"></i> Phone Extensions Directory</h3>
+                <button class="modal-close" onclick="closeExtensionsModal()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="extensions-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="extensionSearchInput" placeholder="Search by name or extension..." oninput="filterExtensions()">
+                </div>
+                <div class="extensions-loader" id="extensionsLoader">
+                    <div class="spinner"></div>
+                    <p>Loading extensions...</p>
+                </div>
+                <div class="extensions-grid" id="extensionsGrid">
+                    <!-- Extension cards populated by JS -->
+                </div>
+                <div class="extensions-empty" id="extensionsEmpty" style="display: none;">
+                    <i class="fa-solid fa-phone-slash"></i>
+                    <p>No extensions found matching your search.</p>
                 </div>
             </div>
         </div>

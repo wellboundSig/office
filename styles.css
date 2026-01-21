@@ -411,6 +411,11 @@ input:hover:not(:focus) {
     border-color: var(--accent-primary);
 }
 
+.control-buttons {
+    display: flex;
+    gap: 10px;
+}
+
 .employee-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -811,6 +816,146 @@ input:hover:not(:focus) {
 
 .empty-state p {
     color: var(--text-secondary);
+}
+
+/* ========================================
+   Extensions Directory
+   ======================================== */
+
+.extensions-search {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.extensions-search i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+}
+
+.extensions-search input {
+    width: 100%;
+    padding: 12px 16px 12px 42px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.extensions-search input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.extensions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+.extensions-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.extensions-grid::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.extensions-grid::-webkit-scrollbar-thumb {
+    background: var(--border-light);
+    border-radius: 3px;
+}
+
+.extension-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+.extension-card:hover {
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.extension-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.extension-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.extension-number {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.extension-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    line-height: 1.3;
+}
+
+.extension-outbound {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.extension-outbound i {
+    font-size: 10px;
+}
+
+.extensions-loader {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.extensions-loader .spinner {
+    width: 32px;
+    height: 32px;
+    margin: 0 auto 12px;
+}
+
+.extensions-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-muted);
+}
+
+.extensions-empty i {
+    font-size: 40px;
+    margin-bottom: 12px;
+    display: block;
 }
 
 /* ========================================

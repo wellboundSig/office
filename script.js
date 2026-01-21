@@ -17,6 +17,7 @@ let employeesCache = [];
 let uploadedR2Url = null;  // Stores the R2 URL after upload
 let currentImageFile = null;  // Stores the current image file for upload
 let isUploading = false;
+let extensionsCache = [];  // Stores phone extensions data
 
 // ========================================
 // Image Handling
@@ -634,6 +635,105 @@ async function searchEmployee() {
 }
 
 // ========================================
+// Extensions Directory Functions
+// ========================================
+
+function openExtensionsModal() {
+    document.getElementById('extensionsModal').classList.add('active');
+    document.getElementById('extensionSearchInput').value = '';
+    loadExtensions();
+}
+
+function closeExtensionsModal() {
+    document.getElementById('extensionsModal').classList.remove('active');
+}
+
+async function loadExtensions() {
+    const loader = document.getElementById('extensionsLoader');
+    const grid = document.getElementById('extensionsGrid');
+    const empty = document.getElementById('extensionsEmpty');
+    
+    if (!grid) return;
+    
+    loader.style.display = 'block';
+    grid.innerHTML = '';
+    empty.style.display = 'none';
+    
+    try {
+        const response = await fetch(`${CONFIG.scriptUrl}?action=extensions`);
+        const extensions = await response.json();
+        
+        extensionsCache = extensions;
+        
+        loader.style.display = 'none';
+        
+        if (extensions.length === 0) {
+            empty.style.display = 'block';
+            return;
+        }
+        
+        renderExtensionsGrid(extensions);
+    } catch (error) {
+        console.error('Error loading extensions:', error);
+        loader.style.display = 'none';
+        empty.style.display = 'block';
+        empty.querySelector('p').textContent = 'Could not load extensions. Please try again.';
+    }
+}
+
+function renderExtensionsGrid(extensions) {
+    const grid = document.getElementById('extensionsGrid');
+    const empty = document.getElementById('extensionsEmpty');
+    
+    grid.innerHTML = '';
+    
+    if (extensions.length === 0) {
+        empty.style.display = 'block';
+        return;
+    }
+    
+    empty.style.display = 'none';
+    
+    extensions.forEach(ext => {
+        const card = document.createElement('div');
+        card.className = 'extension-card';
+        
+        card.innerHTML = `
+            <div class="extension-card-header">
+                <div class="extension-icon">
+                    <i class="fa-solid fa-phone"></i>
+                </div>
+                <div class="extension-number">${ext.extension}</div>
+            </div>
+            <div class="extension-name">${ext.name}</div>
+            <div class="extension-outbound">
+                <i class="fa-solid fa-building"></i>
+                ${ext.outboundName}
+            </div>
+        `;
+        
+        grid.appendChild(card);
+    });
+}
+
+function filterExtensions() {
+    const searchTerm = document.getElementById('extensionSearchInput').value.toLowerCase().trim();
+    
+    if (!searchTerm) {
+        renderExtensionsGrid(extensionsCache);
+        return;
+    }
+    
+    const filtered = extensionsCache.filter(ext => 
+        ext.name.toLowerCase().includes(searchTerm) || 
+        ext.extension.includes(searchTerm) ||
+        ext.outboundName.toLowerCase().includes(searchTerm)
+    );
+    
+    renderExtensionsGrid(filtered);
+}
+
+// ========================================
 // Toast Notification
 // ========================================
 
@@ -695,12 +795,25 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Close extensions modal on overlay click
+    const extensionsModal = document.getElementById('extensionsModal');
+    if (extensionsModal) {
+        extensionsModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeExtensionsModal();
+            }
+        });
+    }
+    
     // Escape key to close modals
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeModal();
             if (typeof closeSignatureModal === 'function') {
                 closeSignatureModal();
+            }
+            if (typeof closeExtensionsModal === 'function') {
+                closeExtensionsModal();
             }
         }
     });
