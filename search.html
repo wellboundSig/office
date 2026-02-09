@@ -70,6 +70,14 @@
                         <i class="fa-solid fa-copy"></i> Copy Signature
                     </button>
                 </div>
+                <div class="format-toggle">
+                    <label>Format</label>
+                    <select id="searchFormatSelect" onchange="updateSearchSignature()">
+                        <option value="wellbound" selected>Wellbound</option>
+                        <option value="specialNeeds">Special Needs</option>
+                        <option value="arista" disabled>Arista (Coming Soon)</option>
+                    </select>
+                </div>
                 <div class="signature-preview" id="searchSignaturePreview">
                 </div>
             </div>

@@ -9,6 +9,72 @@ const CONFIG = {
     r2PublicBase: 'https://pub-d7fda00c74254211bfe47adcb51427b0.r2.dev'
 };
 
+// Signature Format Configurations
+const FORMATS = {
+    wellbound: {
+        label: 'Wellbound',
+        borderColor: '#561640',
+        nameFont: "'Verdana',sans-serif",
+        nameSize: '12pt',
+        nameColor: '#561640',
+        titleFont: "'Calibri',sans-serif",
+        titleSize: '9pt',
+        titleColor: '#98788f',
+        contactFont: "'Abadi','Calibri',sans-serif",
+        contactSize: '12pt',
+        contactColor: '#561640',
+        addressFont: "'Verdana',sans-serif",
+        addressSize: '8pt',
+        addressColor: '#98788f',
+        lineColor: '#561640',
+        lineWeight: '1.5pt',
+        logo: {
+            src: 'imgs/logo.png',
+            href: 'http://wellboundhc.com/',
+            width: 137,
+            height: 39,
+            style: 'width:1.91in;height:0.54in',
+            alt: 'Wellbound Certified Home Health Agency'
+        },
+        socialIcons: [
+            { href: 'https://www.facebook.com/wellbound.homecare', src: 'imgs/facebook icon.png', alt: 'Facebook', size: 22 },
+            { href: 'https://www.linkedin.com/company/75448188/admin/feed/posts/', src: 'imgs/linked in icon.png', alt: 'LinkedIn', size: 22 }
+        ]
+    },
+    specialNeeds: {
+        label: 'Special Needs',
+        borderColor: '#252347',
+        nameFont: "'Verdana',sans-serif",
+        nameSize: '12pt',
+        nameColor: '#252347',
+        titleFont: "'Calibri',sans-serif",
+        titleSize: '9pt',
+        titleColor: '#372f87',
+        contactFont: "'Abadi','Calibri',sans-serif",
+        contactSize: '12pt',
+        contactColor: '#252347',
+        addressFont: "'Verdana',sans-serif",
+        addressSize: '8pt',
+        addressColor: '#252347',
+        addressBold: true,
+        lineColor: '#252347',
+        lineWeight: '1.5pt',
+        logo: {
+            src: 'imgs/logoSN.png',
+            href: 'http://wellboundhc.com/',
+            width: 137,
+            height: 39,
+            style: 'width:1.91in;height:0.54in',
+            alt: 'Wellbound For Special Needs'
+        },
+        iconSpacing: '&nbsp;',
+        socialIcons: [
+            { href: 'https://www.instagram.com/wellboundspecialneeds/', src: 'imgs/linked in iconSN.png', alt: 'Instagram', size: 22 },
+            { href: 'https://www.facebook.com/wellbound.homecare', src: 'imgs/facebook iconSN.png', alt: 'Facebook', size: 22 }
+        ]
+    }
+};
+
 // State
 let uploadedImageData = null;
 let circularImageData = null;
@@ -18,12 +84,19 @@ let uploadedR2Url = null;  // Stores the R2 URL after upload
 let currentImageFile = null;  // Stores the current image file for upload
 let isUploading = false;
 let extensionsCache = [];  // Stores phone extensions data
+let currentModalEmployee = null;  // Stores employee for modal format toggle
+let currentSearchEmployee = null;  // Stores employee for search format toggle
 
 // ========================================
 // Image Handling
 // ========================================
 
-function createCircularImage(imgSrc, callback) {
+function createCircularImage(imgSrc, callback, borderColor) {
+    if (!borderColor) {
+        const formatSelect = document.getElementById('signatureFormat');
+        const format = formatSelect ? formatSelect.value : 'wellbound';
+        borderColor = (FORMATS[format] || FORMATS.wellbound).borderColor;
+    }
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = function() {
@@ -41,7 +114,7 @@ function createCircularImage(imgSrc, callback) {
         // Draw border circle
         ctx.beginPath();
         ctx.arc(totalSize / 2, totalSize / 2, totalSize / 2, 0, Math.PI * 2);
-        ctx.fillStyle = '#561640';
+        ctx.fillStyle = borderColor;
         ctx.fill();
         
         // Clip for image
@@ -185,7 +258,14 @@ async function uploadImageToR2() {
 // Signature Generation
 // ========================================
 
-function generateSignatureHTML(data = null) {
+function generateSignatureHTML(data = null, format = null) {
+    // Determine format
+    if (!format) {
+        const formatSelect = document.getElementById('signatureFormat');
+        format = formatSelect ? formatSelect.value : 'wellbound';
+    }
+    const fmt = FORMATS[format] || FORMATS.wellbound;
+
     const name = data?.name || document.getElementById('workerName')?.value || 'Worker Name';
     const title = data?.title || document.getElementById('jobTitle')?.value || 'Job Title';
     const phone = data?.phone || document.getElementById('phoneNumber')?.value || '718.400.WELL (9355)';
@@ -201,10 +281,10 @@ function generateSignatureHTML(data = null) {
     let profileImageHtml;
     
     if (imageUrl) {
-        // Use external image URL
+        // Use external image URL with format-specific border color
         profileImageHtml = `<img src="${imageUrl}" 
             width="${imageSize}" height="${imageSize}" 
-            style="width:${imageSize}px;height:${imageSize}px;border-radius:50%;border:2.25pt solid #561640;object-fit:cover;display:block;" 
+            style="width:${imageSize}px;height:${imageSize}px;border-radius:50%;border:2.25pt solid ${fmt.borderColor};object-fit:cover;display:block;" 
             alt="${name}">`;
     } else if (circularImageData && !data) {
         // Use uploaded circular image (only on create page)
@@ -214,12 +294,18 @@ function generateSignatureHTML(data = null) {
             alt="${name}">`;
     } else {
         // No image placeholder
-        profileImageHtml = `<div style="width:96px;height:96px;border-radius:50%;border:2.25pt solid #561640;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#98788f;font-size:10pt;">No Photo</div>`;
+        profileImageHtml = `<div style="width:96px;height:96px;border-radius:50%;border:2.25pt solid ${fmt.borderColor};background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:${fmt.titleColor};font-size:10pt;">No Photo</div>`;
     }
     
-    const logoWidth = 137;
-    const logoHeight = 39;
-    const iconSize = 22;
+    // Build social icons HTML
+    const iconSpacer = fmt.iconSpacing || '&nbsp;&nbsp;&nbsp;';
+    let socialIconsHtml = '';
+    fmt.socialIcons.forEach((icon, i) => {
+        if (i > 0) socialIconsHtml += iconSpacer + '\n            ';
+        socialIconsHtml += `<a href="${icon.href}" style="text-decoration:none;">
+                <img src="${icon.src}" width="${icon.size}" height="${icon.size}" style="width:${icon.size}pt;height:${icon.size}pt;border:0;" alt="${icon.alt}">
+            </a>`;
+    });
     
     return `<!--[if gte mso 9]><xml>
 <o:OfficeDocumentSettings>
@@ -235,53 +321,48 @@ function generateSignatureHTML(data = null) {
     </tr>
     <tr>
         <td style="padding:0 0 2pt 0;">
-            <span style="font-family:'Verdana',sans-serif;font-size:12pt;font-weight:bold;color:#561640;mso-line-height-rule:exactly;">${name}</span>
+            <span style="font-family:${fmt.nameFont};font-size:${fmt.nameSize};font-weight:bold;color:${fmt.nameColor};mso-line-height-rule:exactly;">${name}</span>
         </td>
     </tr>
     <tr>
         <td style="padding:0 0 4pt 0;">
-            <span style="font-family:'Calibri',sans-serif;font-size:9pt;color:#98788f;mso-line-height-rule:exactly;">${title}</span>
+            <span style="font-family:${fmt.titleFont};font-size:${fmt.titleSize};color:${fmt.titleColor};mso-line-height-rule:exactly;">${title}</span>
         </td>
     </tr>
     <tr>
-        <td style="padding:2pt 0 6pt 0;border-top:1.5pt solid #561640;">
-        </td>
-    </tr>
-    <tr>
-        <td style="padding:0;">
-            <span style="font-family:'Abadi','Calibri',sans-serif;font-size:12pt;color:#561640;"><b>Phone</b> | ${phone} Ext. ${ext}</span>
+        <td style="padding:2pt 0 6pt 0;border-top:${fmt.lineWeight} solid ${fmt.lineColor};">
         </td>
     </tr>
     <tr>
         <td style="padding:0;">
-            <span style="font-family:'Abadi','Calibri',sans-serif;font-size:12pt;color:#561640;"><b>Fax</b> | ${fax}</span>
+            <span style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};"><b>Phone</b> | ${phone} Ext. ${ext}</span>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:0;">
+            <span style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};"><b>Fax</b> | ${fax}</span>
         </td>
     </tr>
     <tr>
         <td style="padding:0 0 8pt 0;">
-            <span style="font-family:'Abadi','Calibri',sans-serif;font-size:12pt;color:#561640;"><b>Email</b> | </span><a href="mailto:${email}" style="font-family:'Abadi','Calibri',sans-serif;font-size:12pt;color:#561640;text-decoration:underline;">${email}</a>
+            <span style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};"><b>Email</b> | </span><a href="mailto:${email}" style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};text-decoration:underline;">${email}</a>
         </td>
     </tr>
     <tr>
         <td style="padding:0 0 12pt 0;">
-            <span style="font-family:'Verdana',sans-serif;font-size:8pt;color:#98788f;">${addressFormatted}</span>
+            <span style="font-family:${fmt.addressFont};font-size:${fmt.addressSize};color:${fmt.addressColor};${fmt.addressBold ? 'font-weight:bold;' : ''}">${addressFormatted}</span>
         </td>
     </tr>
     <tr>
         <td style="padding:0 0 10pt 0;">
-            <a href="http://wellboundhc.com/" style="text-decoration:none;">
-                <img src="imgs/logo.png" width="${logoWidth}" height="${logoHeight}" style="width:1.91in;height:0.54in;border:0;display:block;" alt="Wellbound Certified Home Health Agency">
+            <a href="${fmt.logo.href}" style="text-decoration:none;">
+                <img src="${fmt.logo.src}" width="${fmt.logo.width}" height="${fmt.logo.height}" style="${fmt.logo.style};border:0;display:block;" alt="${fmt.logo.alt}">
             </a>
         </td>
     </tr>
     <tr>
         <td style="padding:0;">
-            <a href="https://www.facebook.com/wellbound.homecare" style="text-decoration:none;">
-                <img src="imgs/facebook icon.png" width="${iconSize}" height="${iconSize}" style="width:22pt;height:22pt;border:0;" alt="Facebook">
-            </a>&nbsp;&nbsp;&nbsp;
-            <a href="https://www.linkedin.com/company/75448188/admin/feed/posts/" style="text-decoration:none;">
-                <img src="imgs/linked in icon.png" width="${iconSize}" height="${iconSize}" style="width:22pt;height:22pt;border:0;" alt="LinkedIn">
-            </a>
+            ${socialIconsHtml}
         </td>
     </tr>
 </table>`;
@@ -298,7 +379,9 @@ function generateSignature() {
         return;
     }
     
-    const signatureHtml = generateSignatureHTML();
+    const formatSelect = document.getElementById('signatureFormat');
+    const format = formatSelect ? formatSelect.value : 'wellbound';
+    const signatureHtml = generateSignatureHTML(null, format);
     document.getElementById('signaturePreview').innerHTML = signatureHtml;
 }
 
@@ -546,8 +629,13 @@ function filterList() {
 }
 
 function openSignatureModal(employee) {
+    currentModalEmployee = employee;
     document.getElementById('signatureModal').classList.add('active');
     document.getElementById('modalEmployeeName').textContent = employee.name;
+    
+    // Reset format selector to default
+    const formatSelect = document.getElementById('modalFormatSelect');
+    if (formatSelect) formatSelect.value = 'wellbound';
     
     const signatureHtml = generateSignatureHTML({
         name: employee.name,
@@ -556,9 +644,37 @@ function openSignatureModal(employee) {
         extension: employee.extension,
         email: employee.email,
         imageUrl: employee.imageUrl
-    });
+    }, 'wellbound');
     
     document.getElementById('modalSignaturePreview').innerHTML = signatureHtml;
+}
+
+function updateModalSignature() {
+    if (!currentModalEmployee) return;
+    const format = document.getElementById('modalFormatSelect')?.value || 'wellbound';
+    const signatureHtml = generateSignatureHTML({
+        name: currentModalEmployee.name,
+        title: currentModalEmployee.title,
+        phone: currentModalEmployee.phone,
+        extension: currentModalEmployee.extension,
+        email: currentModalEmployee.email,
+        imageUrl: currentModalEmployee.imageUrl
+    }, format);
+    document.getElementById('modalSignaturePreview').innerHTML = signatureHtml;
+}
+
+function updateSearchSignature() {
+    if (!currentSearchEmployee) return;
+    const format = document.getElementById('searchFormatSelect')?.value || 'wellbound';
+    const signatureHtml = generateSignatureHTML({
+        name: currentSearchEmployee.name,
+        title: currentSearchEmployee.title,
+        phone: currentSearchEmployee.phone,
+        extension: currentSearchEmployee.extension,
+        email: currentSearchEmployee.email,
+        imageUrl: currentSearchEmployee.imageUrl
+    }, format);
+    document.getElementById('searchSignaturePreview').innerHTML = signatureHtml;
 }
 
 function closeSignatureModal() {
@@ -599,6 +715,7 @@ async function searchEmployee() {
         
         if (data.found) {
             const emp = data.employee;
+            currentSearchEmployee = emp;
             
             document.getElementById('resultName').textContent = emp.name;
             document.getElementById('resultTitle').textContent = emp.title;
@@ -611,6 +728,10 @@ async function searchEmployee() {
                 resultImg.style.display = 'none';
             }
             
+            // Reset format selector
+            const searchFormatSelect = document.getElementById('searchFormatSelect');
+            if (searchFormatSelect) searchFormatSelect.value = 'wellbound';
+            
             const signatureHtml = generateSignatureHTML({
                 name: emp.name,
                 title: emp.title,
@@ -618,7 +739,7 @@ async function searchEmployee() {
                 extension: emp.extension,
                 email: emp.email,
                 imageUrl: emp.imageUrl
-            });
+            }, 'wellbound');
             
             document.getElementById('searchSignaturePreview').innerHTML = signatureHtml;
             result.style.display = 'block';
@@ -817,4 +938,28 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    
+    // Format dropdown change on create page
+    const formatSelect = document.getElementById('signatureFormat');
+    if (formatSelect) {
+        formatSelect.addEventListener('change', function() {
+            const format = this.value;
+            const borderColor = (FORMATS[format] || FORMATS.wellbound).borderColor;
+            
+            // Re-create circular image preview with new border color
+            if (uploadedImageData) {
+                createCircularImage(uploadedImageData, function(circularData) {
+                    circularImageData = circularData;
+                    const preview = document.getElementById('imagePreview');
+                    if (preview) preview.src = circularData;
+                }, borderColor);
+            }
+            
+            // Re-generate signature preview if one exists
+            const signaturePreview = document.getElementById('signaturePreview');
+            if (signaturePreview && !signaturePreview.querySelector('.preview-placeholder')) {
+                generateSignature();
+            }
+        });
+    }
 });

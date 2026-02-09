@@ -76,6 +76,14 @@
                 </button>
             </div>
             <div class="modal-body">
+                <div class="format-toggle">
+                    <label>Format</label>
+                    <select id="modalFormatSelect" onchange="updateModalSignature()">
+                        <option value="wellbound" selected>Wellbound</option>
+                        <option value="specialNeeds">Special Needs</option>
+                        <option value="arista" disabled>Arista (Coming Soon)</option>
+                    </select>
+                </div>
                 <div class="signature-preview" id="modalSignaturePreview">
                 </div>
                 <div class="modal-actions">
