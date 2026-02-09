@@ -54,10 +54,18 @@ export default {
         });
       }
 
-      // Generate unique filename (always use .jpg since we compress to JPEG)
-      const timestamp = Date.now();
-      const randomId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-      const filename = `signature-photos/${timestamp}_${randomId}.jpg`;
+      // Use custom filename if provided (from HR upload), otherwise auto-generate
+      const customFilename = formData.get("filename");
+      let filename;
+      if (customFilename) {
+        // HR upload: use the provided name (already formatted as firstname-lastname.ext)
+        filename = `signature-photos/${customFilename}`;
+      } else {
+        // Signature generator: auto-generate unique filename
+        const timestamp = Date.now();
+        const randomId = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+        filename = `signature-photos/${timestamp}_${randomId}.jpg`;
+      }
 
       // Upload to R2
       const arrayBuffer = await file.arrayBuffer();
