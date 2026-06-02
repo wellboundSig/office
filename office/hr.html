@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Photo Upload - Wellbound</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-bar">
+            <div class="nav-brand">
+                <img src="logo 2.png" alt="Wellbound" class="nav-logo">
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">
+                    <i class="fa-solid fa-pen-to-square"></i> Create
+                </a>
+                <a href="list.html" class="nav-link">
+                    <i class="fa-solid fa-users"></i> Directory
+                </a>
+                <a href="search.html" class="nav-link">
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </a>
+                <a href="hr.html" class="nav-link active">
+                    <i class="fa-solid fa-id-badge"></i> HR
+                </a>
+            </div>
+        </nav>
+        
+        <div class="page-header">
+            <h1><i class="fa-solid fa-camera-retro"></i> HR Photo Upload</h1>
+            <p>Upload employee profile photos to cloud storage</p>
+        </div>
+        
+        <div class="hr-upload-card">
+            <div class="form-group">
+                <label for="hrFullName">Full Name *</label>
+                <input type="text" id="hrFullName" placeholder="e.g. Karen Mayers" required>
+                <span class="input-hint" id="hrFileNameHint">File will be renamed to: <strong id="hrFileNamePreview">—</strong></span>
+            </div>
+            
+            <div class="form-group">
+                <label>Profile Photo *</label>
+                <div class="hr-dropzone" id="hrDropzone">
+                    <input type="file" id="hrFileInput" accept="image/*" style="display:none;">
+                    <div id="hrDropContent" class="hr-drop-content">
+                        <div class="hr-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                        <div class="hr-drop-text">Drag & drop a photo here</div>
+                        <div class="hr-drop-sub">or <span class="hr-browse-link">browse to select</span></div>
+                        <div class="hr-drop-formats">Accepts JPG, PNG, WEBP</div>
+                    </div>
+                    <div id="hrPreviewContent" class="hr-preview-content" style="display:none;">
+                        <img id="hrImagePreview" class="hr-image-preview" alt="Preview">
+                        <div class="hr-preview-info">
+                            <span id="hrOriginalName" class="hr-original-name"></span>
+                            <span id="hrFileSize" class="hr-file-size"></span>
+                        </div>
+                        <button class="btn btn-secondary btn-sm hr-remove-btn" onclick="hrRemoveImage(event)">
+                            <i class="fa-solid fa-xmark"></i> Remove
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="hrUploadStatus" class="hr-upload-status" style="display:none;">
+                <div class="hr-status-icon" id="hrStatusIcon"><i class="fa-solid fa-spinner fa-spin"></i></div>
+                <div class="hr-status-text" id="hrStatusText">Uploading...</div>
+            </div>
+            
+            <button class="btn btn-primary generate-btn" onclick="hrUploadPhoto()" id="hrUploadBtn">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Upload Photo
+            </button>
+            
+            <div id="hrSuccessResult" class="hr-success-result" style="display:none;">
+                <div class="hr-success-header">
+                    <i class="fa-solid fa-circle-check"></i>
+                    <span>Photo uploaded successfully!</span>
+                </div>
+                <div class="hr-success-details">
+                    <div class="hr-success-row">
+                        <span class="hr-success-label">File name:</span>
+                        <span id="hrSuccessFileName" class="hr-success-value"></span>
+                    </div>
+                    <div class="hr-success-row">
+                        <span class="hr-success-label">URL:</span>
+                        <a id="hrSuccessUrl" class="hr-success-link" href="#" target="_blank"></a>
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="hrCopyUrl()">
+                    <i class="fa-solid fa-copy"></i> Copy URL
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification -->
+    <div class="toast" id="toast">
+        <i class="fa-solid fa-check"></i>
+        <span id="toastMessage">Success!</span>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        // ========================================
+        // HR Photo Upload Logic
+        // ========================================
+
+        let hrSelectedFile = null;
+
+        // Name input → live filename preview
+        document.getElementById('hrFullName').addEventListener('input', function() {
+            updateFileNamePreview();
+        });
+
+        function formatFileName(fullName, extension) {
+            return fullName
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9\s-]/g, '')
+                .replace(/\s+/g, '-')
+                + '.' + extension;
+        }
+
+        function getExtension(filename) {
+            const parts = filename.split('.');
+            if (parts.length > 1) {
+                return parts.pop().toLowerCase();
+            }
+            return 'png'; // default
+        }
+
+        function updateFileNamePreview() {
+            const name = document.getElementById('hrFullName').value.trim();
+            const preview = document.getElementById('hrFileNamePreview');
+            if (!name) {
+                preview.textContent = '—';
+                return;
+            }
+            const ext = hrSelectedFile ? getExtension(hrSelectedFile.name) : 'png';
+            preview.textContent = formatFileName(name, ext);
+        }
+
+        // ========================================
+        // Drag & Drop
+        // ========================================
+
+        const dropzone = document.getElementById('hrDropzone');
+        const fileInput = document.getElementById('hrFileInput');
+
+        dropzone.addEventListener('click', function(e) {
+            if (e.target.closest('.hr-remove-btn')) return;
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length) {
+                hrHandleFile(e.target.files[0]);
+            }
+        });
+
+        dropzone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add('hr-dragover');
+        });
+
+        dropzone.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('hr-dragover');
+        });
+
+        dropzone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove('hr-dragover');
+
+            const files = e.dataTransfer.files;
+            if (files.length && files[0].type.startsWith('image/')) {
+                hrHandleFile(files[0]);
+            } else {
+                showToast('Please drop an image file', true);
+            }
+        });
+
+        function hrHandleFile(file) {
+            hrSelectedFile = file;
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('hrImagePreview').src = e.target.result;
+                document.getElementById('hrOriginalName').textContent = file.name;
+                document.getElementById('hrFileSize').textContent = formatFileSize(file.size);
+                document.getElementById('hrDropContent').style.display = 'none';
+                document.getElementById('hrPreviewContent').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+
+            updateFileNamePreview();
+        }
+
+        function hrRemoveImage(e) {
+            e.stopPropagation();
+            hrSelectedFile = null;
+            fileInput.value = '';
+            document.getElementById('hrDropContent').style.display = 'flex';
+            document.getElementById('hrPreviewContent').style.display = 'none';
+            updateFileNamePreview();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // ========================================
+        // Upload
+        // ========================================
+
+        async function hrUploadPhoto() {
+            const name = document.getElementById('hrFullName').value.trim();
+            
+            if (!name) {
+                showToast('Please enter the employee\'s full name', true);
+                return;
+            }
+            if (!hrSelectedFile) {
+                showToast('Please select a photo to upload', true);
+                return;
+            }
+
+            const ext = getExtension(hrSelectedFile.name);
+            const newFileName = formatFileName(name, ext);
+            const btn = document.getElementById('hrUploadBtn');
+            const statusEl = document.getElementById('hrUploadStatus');
+            const statusIcon = document.getElementById('hrStatusIcon');
+            const statusText = document.getElementById('hrStatusText');
+            const successEl = document.getElementById('hrSuccessResult');
+
+            // Disable button and show status
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+            statusEl.style.display = 'flex';
+            statusIcon.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            statusText.textContent = 'Uploading ' + newFileName + '...';
+            successEl.style.display = 'none';
+
+            try {
+                const formData = new FormData();
+                formData.append('image', hrSelectedFile);
+                formData.append('filename', newFileName);
+
+                const response = await fetch(CONFIG.uploadUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.url) {
+                    // Show success
+                    statusIcon.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i>';
+                    statusText.textContent = 'Upload complete!';
+                    
+                    document.getElementById('hrSuccessFileName').textContent = newFileName;
+                    const urlEl = document.getElementById('hrSuccessUrl');
+                    urlEl.textContent = result.url;
+                    urlEl.href = result.url;
+                    successEl.style.display = 'block';
+                    
+                    showToast('Photo uploaded successfully!');
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                statusIcon.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--error);"></i>';
+                statusText.textContent = 'Upload failed: ' + error.message;
+                showToast('Upload failed. Please try again.', true);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload Photo';
+            }
+        }
+
+        function hrCopyUrl() {
+            const url = document.getElementById('hrSuccessUrl').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('URL copied to clipboard!');
+            }).catch(() => {
+                showToast('Could not copy URL', true);
+            });
+        }
+    </script>
+</body>
+</html>
