@@ -72,6 +72,35 @@ const FORMATS = {
             { href: 'https://www.instagram.com/wellboundspecialneeds/', src: 'imgs/linked in iconSN.png', alt: 'Instagram', size: 22 },
             { href: 'https://www.facebook.com/wellbound.homecare', src: 'imgs/facebook iconSN.png', alt: 'Facebook', size: 22 }
         ]
+    },
+    arista: {
+        label: 'Arista',
+        borderColor: '#3499CC',
+        nameFont: "'Verdana',sans-serif",
+        nameSize: '12pt',
+        nameColor: '#3499CC',
+        titleFont: "'Calibri',sans-serif",
+        titleSize: '9pt',
+        titleColor: '#C45912',
+        contactFont: "'Abadi','Calibri',sans-serif",
+        contactSize: '12pt',
+        contactColor: '#C45912',
+        addressFont: "'Verdana',sans-serif",
+        addressSize: '8pt',
+        addressColor: '#808080',
+        lineColor: '#3499CC',
+        lineWeight: '1.5pt',
+        phoneOverride: '718-215-8406',
+        showFax: false,
+        logo: {
+            src: 'imgs/arista.png',
+            href: 'http://aristacares.com/',
+            width: 118,
+            height: 75,
+            style: 'width:1.23in;height:0.78in',
+            alt: 'Arista Home Care'
+        },
+        socialIcons: []
     }
 };
 
@@ -268,7 +297,8 @@ function generateSignatureHTML(data = null, format = null) {
 
     const name = data?.name || document.getElementById('workerName')?.value || 'Worker Name';
     const title = data?.title || document.getElementById('jobTitle')?.value || 'Job Title';
-    const phone = data?.phone || document.getElementById('phoneNumber')?.value || '718.400.WELL (9355)';
+    let phone = data?.phone || document.getElementById('phoneNumber')?.value || '718.400.WELL (9355)';
+    if (fmt.phoneOverride) phone = fmt.phoneOverride;
     const ext = data?.extension || document.getElementById('extension')?.value || '000';
     const fax = document.getElementById('fax')?.value || '718.766.2109';
     const email = data?.email || document.getElementById('email')?.value || 'email@wellboundhc.com';
@@ -338,11 +368,11 @@ function generateSignatureHTML(data = null, format = null) {
             <span style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};"><b>Phone</b> | ${phone} Ext. ${ext}</span>
         </td>
     </tr>
-    <tr>
+    ${fmt.showFax !== false ? `<tr>
         <td style="padding:0;">
             <span style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};"><b>Fax</b> | ${fax}</span>
         </td>
-    </tr>
+    </tr>` : ''}
     <tr>
         <td style="padding:0 0 8pt 0;">
             <span style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};"><b>Email</b> | </span><a href="mailto:${email}" style="font-family:${fmt.contactFont};font-size:${fmt.contactSize};color:${fmt.contactColor};text-decoration:underline;">${email}</a>
@@ -360,11 +390,11 @@ function generateSignatureHTML(data = null, format = null) {
             </a>
         </td>
     </tr>
-    <tr>
+    ${socialIconsHtml ? `<tr>
         <td style="padding:0;">
             ${socialIconsHtml}
         </td>
-    </tr>
+    </tr>` : ''}
 </table>`;
 }
 
