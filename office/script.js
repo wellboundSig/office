@@ -161,6 +161,10 @@ function getCropDrawRect(imgW, imgH, canvasSize, crop = cropState) {
     };
 }
 
+// Signature displays at ~102px, but we render at 4x so Outlook stays sharp
+const CIRCLE_DISPLAY_SIZE = 102;
+const CIRCLE_RENDER_SCALE = 4;
+
 function createCircularImage(imgSrc, callback, borderColor, crop = cropState) {
     if (!borderColor) {
         const formatSelect = document.getElementById('signatureFormat');
@@ -174,8 +178,9 @@ function createCircularImage(imgSrc, callback, borderColor, crop = cropState) {
         img.crossOrigin = 'anonymous';
     }
     img.onload = function() {
-        const size = 96;
-        const borderWidth = 3;
+        // High-res render: ~408px canvas displayed at 102px → crisp in Outlook
+        const size = 96 * CIRCLE_RENDER_SCALE;
+        const borderWidth = 3 * CIRCLE_RENDER_SCALE;
         const totalSize = size + (borderWidth * 2);
         const cx = totalSize / 2;
         const cy = totalSize / 2;
@@ -184,6 +189,8 @@ function createCircularImage(imgSrc, callback, borderColor, crop = cropState) {
         canvas.width = totalSize;
         canvas.height = totalSize;
         const ctx = canvas.getContext('2d', { alpha: true });
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         
         // Start fully transparent
         ctx.clearRect(0, 0, totalSize, totalSize);
@@ -202,7 +209,6 @@ function createCircularImage(imgSrc, callback, borderColor, crop = cropState) {
         ctx.clip();
         
         const rect = getCropDrawRect(img.width, img.height, totalSize, crop);
-        // Center of photo area is same as canvas center for totalSize
         ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
         ctx.restore();
         
@@ -216,6 +222,7 @@ function createCircularImage(imgSrc, callback, borderColor, crop = cropState) {
         ctx.globalCompositeOperation = 'source-over';
         
         try {
+            // PNG is lossless — quality comes from pixel resolution above
             callback(canvas.toDataURL('image/png'));
         } catch (err) {
             console.error('Circular image export failed (CORS?):', err);
@@ -240,8 +247,8 @@ function createCircularImageAsync(imgSrc, borderColor, crop) {
 /** True circular "No Photo" PNG with transparent corners for Outlook. */
 function createNoPhotoCircleAsync(borderColor, textColor) {
     return new Promise((resolve) => {
-        const size = 96;
-        const borderWidth = 3;
+        const size = 96 * CIRCLE_RENDER_SCALE;
+        const borderWidth = 3 * CIRCLE_RENDER_SCALE;
         const totalSize = size + (borderWidth * 2);
         const cx = totalSize / 2;
         const cy = totalSize / 2;
@@ -249,6 +256,8 @@ function createNoPhotoCircleAsync(borderColor, textColor) {
         canvas.width = totalSize;
         canvas.height = totalSize;
         const ctx = canvas.getContext('2d', { alpha: true });
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         
         ctx.clearRect(0, 0, totalSize, totalSize);
         
@@ -265,7 +274,7 @@ function createNoPhotoCircleAsync(borderColor, textColor) {
         ctx.fill();
         
         ctx.fillStyle = textColor || '#98788f';
-        ctx.font = '10px sans-serif';
+        ctx.font = `${10 * CIRCLE_RENDER_SCALE}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('No Photo', cx, cy);
@@ -292,11 +301,14 @@ function createCircularUploadFile(imgSrc, callback, crop = cropState) {
         img.crossOrigin = 'anonymous';
     }
     img.onload = function() {
-        const size = 400;
+        // High-res circular asset for R2 (source for future signature copies)
+        const size = 800;
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d', { alpha: true });
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
         
         ctx.clearRect(0, 0, size, size);
         
@@ -607,7 +619,8 @@ async function generateSignatureHTML(data = null, format = null) {
     
     const addressFormatted = address.replace(/(\d+)(st|nd|rd|th)/gi, '$1<sup>$2</sup>');
     
-    const imageSize = 102;
+    // Display size stays ~1"; PNG itself is 4x for sharp paste into Outlook
+    const imageSize = CIRCLE_DISPLAY_SIZE;
     let profileImageHtml;
     
     // Always embed a TRUE circular PNG (transparent outside the circle).
