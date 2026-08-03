@@ -139,8 +139,8 @@
                 preview.textContent = '—';
                 return;
             }
-            const ext = hrSelectedFile ? getExtension(hrSelectedFile.name) : 'png';
-            preview.textContent = formatFileName(name, ext);
+            // Always PNG — circular mask requires transparency
+            preview.textContent = formatFileName(name, 'png');
         }
 
         // ========================================
@@ -189,10 +189,25 @@
         function hrHandleFile(file) {
             hrSelectedFile = file;
 
-            // Show preview
+            // Show circular preview + prepare circular PNG for upload
             const reader = new FileReader();
             reader.onload = function(e) {
-                document.getElementById('hrImagePreview').src = e.target.result;
+                createCircularImage(e.target.result, function(circularData) {
+                    if (circularData) {
+                        document.getElementById('hrImagePreview').src = circularData;
+                    } else {
+                        document.getElementById('hrImagePreview').src = e.target.result;
+                    }
+                }, '#561640');
+
+                // Convert to true circular PNG (transparent outside circle) for R2
+                createCircularUploadFile(e.target.result, function(circularFile) {
+                    if (circularFile) {
+                        hrSelectedFile = circularFile;
+                        document.getElementById('hrFileSize').textContent = formatFileSize(circularFile.size) + ' (circular PNG)';
+                    }
+                });
+
                 document.getElementById('hrOriginalName').textContent = file.name;
                 document.getElementById('hrFileSize').textContent = formatFileSize(file.size);
                 document.getElementById('hrDropContent').style.display = 'none';
@@ -234,8 +249,8 @@
                 return;
             }
 
-            const ext = getExtension(hrSelectedFile.name);
-            const newFileName = formatFileName(name, ext);
+            // Always .png — circular mask needs transparency (JPEG has none)
+            const newFileName = formatFileName(name, 'png');
             const btn = document.getElementById('hrUploadBtn');
             const statusEl = document.getElementById('hrUploadStatus');
             const statusIcon = document.getElementById('hrStatusIcon');

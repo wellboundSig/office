@@ -120,45 +120,188 @@ let currentSearchEmployee = null;  // Stores employee for search format toggle
 // Image Handling
 // ========================================
 
+/**
+ * Create a TRUE circular PNG with transparent pixels outside the circle.
+ * Outlook ignores CSS border-radius, so the image itself must be circular.
+ * Border color is baked into the PNG (not CSS).
+ */
+/** Rewrite public R2 URLs through the worker proxy so canvas can read pixels (CORS). */
+function toCorsSafeImageUrl(imgSrc) {
+    if (!imgSrc || imgSrc.startsWith('data:')) return imgSrc;
+    const marker = '/signature-photos/';
+    const idx = imgSrc.indexOf(marker);
+    if (idx === -1) return imgSrc;
+    const key = imgSrc.substring(idx + 1); // signature-photos/...
+    return `${CONFIG.uploadUrl}?key=${encodeURIComponent(key)}`;
+}
+
 function createCircularImage(imgSrc, callback, borderColor) {
     if (!borderColor) {
         const formatSelect = document.getElementById('signatureFormat');
         const format = formatSelect ? formatSelect.value : 'wellbound';
         borderColor = (FORMATS[format] || FORMATS.wellbound).borderColor;
     }
+    const safeSrc = toCorsSafeImageUrl(imgSrc);
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Only set crossOrigin for remote URLs (avoids tainting local data URIs)
+    if (safeSrc && !safeSrc.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+    }
     img.onload = function() {
-        const canvas = document.createElement('canvas');
         const size = 96;
         const borderWidth = 3;
         const totalSize = size + (borderWidth * 2);
+        const cx = totalSize / 2;
+        const cy = totalSize / 2;
         
+        const canvas = document.createElement('canvas');
         canvas.width = totalSize;
         canvas.height = totalSize;
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d', { alpha: true });
         
+        // Start fully transparent
         ctx.clearRect(0, 0, totalSize, totalSize);
         
-        // Draw border circle
+        // Draw border ring as filled outer circle
         ctx.beginPath();
-        ctx.arc(totalSize / 2, totalSize / 2, totalSize / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, totalSize / 2, 0, Math.PI * 2);
         ctx.fillStyle = borderColor;
         ctx.fill();
         
-        // Clip for image
+        // Draw photo clipped to inner circle
+        ctx.save();
         ctx.beginPath();
-        ctx.arc(totalSize / 2, totalSize / 2, size / 2, 0, Math.PI * 2);
+        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
         
-        // Draw image
         const scale = Math.max(size / img.width, size / img.height);
-        const x = (totalSize - img.width * scale) / 2;
-        const y = (totalSize - img.height * scale) / 2;
-        ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (totalSize - w) / 2, (totalSize - h) / 2, w, h);
+        ctx.restore();
         
-        callback(canvas.toDataURL('image/png'));
+        // Force-erase every pixel outside the outer circle (true alpha mask).
+        // This removes residual square corner pixels that Outlook would show.
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.beginPath();
+        ctx.arc(cx, cy, totalSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        
+        try {
+            callback(canvas.toDataURL('image/png'));
+        } catch (err) {
+            console.error('Circular image export failed (CORS?):', err);
+            callback(null);
+        }
+    };
+    img.onerror = function() {
+        console.error('Failed to load image for circular crop:', safeSrc);
+        callback(null);
+    };
+    img.src = safeSrc;
+}
+
+function createCircularImageAsync(imgSrc, borderColor) {
+    return new Promise((resolve) => {
+        createCircularImage(imgSrc, resolve, borderColor);
+    });
+}
+
+/** True circular "No Photo" PNG with transparent corners for Outlook. */
+function createNoPhotoCircleAsync(borderColor, textColor) {
+    return new Promise((resolve) => {
+        const size = 96;
+        const borderWidth = 3;
+        const totalSize = size + (borderWidth * 2);
+        const cx = totalSize / 2;
+        const cy = totalSize / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = totalSize;
+        canvas.height = totalSize;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        ctx.clearRect(0, 0, totalSize, totalSize);
+        
+        // Outer border circle
+        ctx.beginPath();
+        ctx.arc(cx, cy, totalSize / 2, 0, Math.PI * 2);
+        ctx.fillStyle = borderColor;
+        ctx.fill();
+        
+        // Inner fill
+        ctx.beginPath();
+        ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fill();
+        
+        ctx.fillStyle = textColor || '#98788f';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('No Photo', cx, cy);
+        
+        // Hard alpha mask
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.beginPath();
+        ctx.arc(cx, cy, totalSize / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+/**
+ * Circular PNG for R2 storage (no format border — border is applied at signature time).
+ * Transparent outside the circle so Outlook never sees square corners.
+ */
+function createCircularUploadFile(imgSrc, callback) {
+    const img = new Image();
+    if (imgSrc && !imgSrc.startsWith('data:')) {
+        img.crossOrigin = 'anonymous';
+    }
+    img.onload = function() {
+        const size = 400;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d', { alpha: true });
+        
+        ctx.clearRect(0, 0, size, size);
+        
+        // Clip to circle and draw photo
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        ctx.restore();
+        
+        // Hard alpha mask — no square pixels remain
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+        
+        canvas.toBlob(function(blob) {
+            if (!blob) {
+                callback(null);
+                return;
+            }
+            const file = new File([blob], 'profile.png', { type: 'image/png' });
+            console.log(`Circular PNG ready: ${Math.round(blob.size / 1024)}KB`);
+            callback(file);
+        }, 'image/png');
     };
     img.onerror = function() {
         callback(null);
@@ -176,9 +319,9 @@ function handleImageUpload(event) {
             uploadedImageData = e.target.result;
             hasImage = true;
             
-            // Compress and prepare the image for upload
-            compressImageForUpload(e.target.result, function(compressedBlob) {
-                currentImageFile = compressedBlob;
+            // Prepare circular PNG for R2 upload (transparent outside circle)
+            createCircularUploadFile(e.target.result, function(circularFile) {
+                currentImageFile = circularFile;
             });
             
             createCircularImage(uploadedImageData, function(circularData) {
@@ -196,53 +339,6 @@ function handleImageUpload(event) {
         };
         reader.readAsDataURL(file);
     }
-}
-
-// Compress and convert image to JPEG for faster loading
-function compressImageForUpload(imgSrc, callback) {
-    const img = new Image();
-    img.onload = function() {
-        const canvas = document.createElement('canvas');
-        
-        // Max dimensions for profile photo (keeps it reasonable)
-        const maxSize = 400;
-        let width = img.width;
-        let height = img.height;
-        
-        // Scale down if larger than maxSize
-        if (width > height) {
-            if (width > maxSize) {
-                height = Math.round((height * maxSize) / width);
-                width = maxSize;
-            }
-        } else {
-            if (height > maxSize) {
-                width = Math.round((width * maxSize) / height);
-                height = maxSize;
-            }
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        
-        // Fill with white background (for JPEG transparency)
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-        
-        // Draw the image
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // Convert to JPEG with 85% quality (good balance of size/quality)
-        canvas.toBlob(function(blob) {
-            // Create a new file with .jpg extension
-            const compressedFile = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
-            console.log(`Image compressed: ${Math.round(blob.size / 1024)}KB`);
-            callback(compressedFile);
-        }, 'image/jpeg', 0.85);
-    };
-    img.src = imgSrc;
 }
 
 // Upload image to Cloudflare R2
@@ -287,7 +383,7 @@ async function uploadImageToR2() {
 // Signature Generation
 // ========================================
 
-function generateSignatureHTML(data = null, format = null) {
+async function generateSignatureHTML(data = null, format = null) {
     // Determine format
     if (!format) {
         const formatSelect = document.getElementById('signatureFormat');
@@ -310,21 +406,28 @@ function generateSignatureHTML(data = null, format = null) {
     const imageSize = 102;
     let profileImageHtml;
     
+    // Always embed a TRUE circular PNG (transparent outside the circle).
+    // Never rely on CSS border-radius — Outlook ignores it and shows a square.
+    let circularSrc = null;
     if (imageUrl) {
-        // Use external image URL with format-specific border color
-        profileImageHtml = `<img src="${imageUrl}" 
-            width="${imageSize}" height="${imageSize}" 
-            style="width:${imageSize}px;height:${imageSize}px;border-radius:50%;border:2.25pt solid ${fmt.borderColor};object-fit:cover;display:block;" 
-            alt="${name}">`;
+        circularSrc = await createCircularImageAsync(imageUrl, fmt.borderColor);
     } else if (circularImageData && !data) {
-        // Use uploaded circular image (only on create page)
-        profileImageHtml = `<img src="${circularImageData}" 
+        circularSrc = circularImageData;
+    }
+    
+    if (circularSrc) {
+        // No border-radius, no CSS border — shape + border are baked into the PNG
+        profileImageHtml = `<img src="${circularSrc}" 
             width="${imageSize}" height="${imageSize}" 
-            style="width:${imageSize}px;height:${imageSize}px;display:block;" 
+            style="width:${imageSize}px;height:${imageSize}px;display:block;border:0;" 
             alt="${name}">`;
     } else {
-        // No image placeholder
-        profileImageHtml = `<div style="width:96px;height:96px;border-radius:50%;border:2.25pt solid ${fmt.borderColor};background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:${fmt.titleColor};font-size:10pt;">No Photo</div>`;
+        // Circular "No Photo" placeholder PNG (also true circle, not CSS-rounded)
+        const placeholderSrc = await createNoPhotoCircleAsync(fmt.borderColor, fmt.titleColor);
+        profileImageHtml = `<img src="${placeholderSrc}" 
+            width="${imageSize}" height="${imageSize}" 
+            style="width:${imageSize}px;height:${imageSize}px;display:block;border:0;" 
+            alt="No Photo">`;
     }
     
     // Build social icons HTML
@@ -398,7 +501,7 @@ function generateSignatureHTML(data = null, format = null) {
 </table>`;
 }
 
-function generateSignature() {
+async function generateSignature() {
     const name = document.getElementById('workerName').value;
     const title = document.getElementById('jobTitle').value;
     const ext = document.getElementById('extension').value;
@@ -411,7 +514,7 @@ function generateSignature() {
     
     const formatSelect = document.getElementById('signatureFormat');
     const format = formatSelect ? formatSelect.value : 'wellbound';
-    const signatureHtml = generateSignatureHTML(null, format);
+    const signatureHtml = await generateSignatureHTML(null, format);
     document.getElementById('signaturePreview').innerHTML = signatureHtml;
 }
 
@@ -658,7 +761,7 @@ function filterList() {
     renderEmployeeGrid(filtered);
 }
 
-function openSignatureModal(employee) {
+async function openSignatureModal(employee) {
     currentModalEmployee = employee;
     document.getElementById('signatureModal').classList.add('active');
     document.getElementById('modalEmployeeName').textContent = employee.name;
@@ -667,7 +770,9 @@ function openSignatureModal(employee) {
     const formatSelect = document.getElementById('modalFormatSelect');
     if (formatSelect) formatSelect.value = 'wellbound';
     
-    const signatureHtml = generateSignatureHTML({
+    document.getElementById('modalSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    
+    const signatureHtml = await generateSignatureHTML({
         name: employee.name,
         title: employee.title,
         phone: employee.phone,
@@ -679,10 +784,11 @@ function openSignatureModal(employee) {
     document.getElementById('modalSignaturePreview').innerHTML = signatureHtml;
 }
 
-function updateModalSignature() {
+async function updateModalSignature() {
     if (!currentModalEmployee) return;
     const format = document.getElementById('modalFormatSelect')?.value || 'wellbound';
-    const signatureHtml = generateSignatureHTML({
+    document.getElementById('modalSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    const signatureHtml = await generateSignatureHTML({
         name: currentModalEmployee.name,
         title: currentModalEmployee.title,
         phone: currentModalEmployee.phone,
@@ -693,10 +799,11 @@ function updateModalSignature() {
     document.getElementById('modalSignaturePreview').innerHTML = signatureHtml;
 }
 
-function updateSearchSignature() {
+async function updateSearchSignature() {
     if (!currentSearchEmployee) return;
     const format = document.getElementById('searchFormatSelect')?.value || 'wellbound';
-    const signatureHtml = generateSignatureHTML({
+    document.getElementById('searchSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    const signatureHtml = await generateSignatureHTML({
         name: currentSearchEmployee.name,
         title: currentSearchEmployee.title,
         phone: currentSearchEmployee.phone,
@@ -762,7 +869,7 @@ async function searchEmployee() {
             const searchFormatSelect = document.getElementById('searchFormatSelect');
             if (searchFormatSelect) searchFormatSelect.value = 'wellbound';
             
-            const signatureHtml = generateSignatureHTML({
+            const signatureHtml = await generateSignatureHTML({
                 name: emp.name,
                 title: emp.title,
                 phone: emp.phone,
