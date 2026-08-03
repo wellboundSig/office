@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Email Signature - Wellbound</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <nav class="nav-bar">
+            <div class="nav-brand">
+                <img src="logo 2.png" alt="Wellbound" class="nav-logo">
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">
+                    <i class="fa-solid fa-pen-to-square"></i> Create
+                </a>
+                <a href="list.html" class="nav-link">
+                    <i class="fa-solid fa-users"></i> Directory
+                </a>
+                <a href="search.html" class="nav-link">
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </a>
+                <a href="hr.html" class="nav-link">
+                    <i class="fa-solid fa-id-badge"></i> HR
+                </a>
+            </div>
+        </nav>
+        
+        <div class="page-header">
+            <h1><i class="fa-solid fa-signature"></i> <span id="personalPageTitle">Your Signature</span></h1>
+            <p id="personalPageSubtitle">Loading your ready-to-copy email signature…</p>
+        </div>
+        
+        <div class="search-card personal-sig-card">
+            <div class="loader" id="personalLoader">
+                <div class="spinner"></div>
+                <p>Loading signature…</p>
+            </div>
+            
+            <div id="personalContent" style="display:none;">
+                <div class="result-header" style="margin-bottom:20px;">
+                    <div class="result-info">
+                        <img id="personalAvatar" class="result-avatar" src="" alt="" style="display:none;">
+                        <div>
+                            <h3 id="personalName">Employee Name</h3>
+                            <p id="personalTitle">Job Title</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="format-toggle">
+                    <label>Format</label>
+                    <select id="personalFormatSelect" onchange="updatePersonalSignature()">
+                        <option value="wellbound" selected>Wellbound</option>
+                        <option value="specialNeeds">Special Needs</option>
+                        <option value="arista">Arista</option>
+                    </select>
+                </div>
+                
+                <div class="signature-preview" id="personalSignaturePreview"></div>
+                
+                <div class="modal-actions" style="margin-top:20px;">
+                    <button class="btn btn-primary" id="copyPersonalBtn" onclick="copyPersonalSignature()">
+                        <i class="fa-solid fa-copy"></i> Copy Signature
+                    </button>
+                    <button class="btn btn-secondary" onclick="copyPersonalLink()">
+                        <i class="fa-solid fa-link"></i> Copy Link
+                    </button>
+                </div>
+                
+                <p class="personal-link-hint" id="personalLinkHint"></p>
+            </div>
+            
+            <div id="personalEmpty" class="search-empty" style="display:none;border-top:none;padding-top:0;">
+                <i class="fa-solid fa-user-xmark"></i>
+                <h3>Signature Not Found</h3>
+                <p>We couldn't find an employee matching this link. Check the URL or browse the <a href="list.html">Directory</a>.</p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast" id="toast">
+        <i class="fa-solid fa-check"></i>
+        <span id="toastMessage">Success!</span>
+    </div>
+    
+    <script src="script.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', loadPersonalSignaturePage);
+    </script>
+</body>
+</html>

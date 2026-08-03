@@ -115,6 +115,7 @@ let isUploading = false;
 let extensionsCache = [];  // Stores phone extensions data
 let currentModalEmployee = null;  // Stores employee for modal format toggle
 let currentSearchEmployee = null;  // Stores employee for search format toggle
+let currentPersonalEmployee = null;  // Personal signature page (?u=slug)
 
 // Crop positioning: pan (offsetX/Y -1..1) + zoom (>=1) so users can center faces
 let cropState = { offsetX: 0, offsetY: 0, zoom: 1 };
@@ -736,6 +737,217 @@ async function generateSignature() {
 }
 
 // ========================================
+// Personal Signature URLs
+// ========================================
+
+/** Slug for shareable URLs: "Karen Mayers" + "Intake Specialist" → karen-mayers-intake-specialist */
+function employeeSlug(name, title) {
+    const parts = [name || '', title || '']
+        .join(' ')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+    return parts;
+}
+
+function nameOnlySlug(name) {
+    return employeeSlug(name, '');
+}
+
+/**
+ * Shareable personal signature URL.
+ * Pretty:  https://wellboundsig.github.io/office/s/karen-mayers-intake-specialist
+ * Fallback query form also works: s.html?u=karen-mayers-intake-specialist
+ */
+function getPersonalSignatureUrl(employee, format) {
+    if (!employee?.name) return '';
+    const slug = employeeSlug(employee.name, employee.title);
+    const origin = window.location.origin;
+    // Detect project pages base (/office/) vs root
+    const path = window.location.pathname || '/';
+    const baseMatch = path.match(/^(.*\/office)\//) || path.match(/^(\/office)$/);
+    const base = baseMatch ? baseMatch[1] + '/' : (path.includes('/office') ? '/office/' : '/');
+    
+    let url = `${origin}${base}s/${encodeURIComponent(slug)}`;
+    if (format && format !== 'wellbound') {
+        url += `?format=${encodeURIComponent(format)}`;
+    }
+    return url;
+}
+
+function parsePersonalSlugFromLocation() {
+    const params = new URLSearchParams(window.location.search);
+    // s.html?u=slug  OR  s.html?slug  OR first bare query key
+    if (params.get('u')) return params.get('u').trim();
+    if (params.get('slug')) return params.get('slug').trim();
+    
+    // Support s.html?karen-mayers-intake-specialist (key with empty value)
+    for (const [key, value] of params.entries()) {
+        if (key && !value && key !== 'format' && key !== 'f') return key.trim();
+    }
+    
+    // Hash fallback: #karen-mayers
+    if (location.hash && location.hash.length > 1) {
+        return decodeURIComponent(location.hash.slice(1)).trim();
+    }
+    return '';
+}
+
+function findEmployeeBySlug(employees, slug) {
+    if (!slug) return null;
+    const target = slug.toLowerCase();
+    
+    // Prefer full name+title match
+    let match = employees.find(emp => employeeSlug(emp.name, emp.title) === target);
+    if (match) return match;
+    
+    // Then name-only
+    match = employees.find(emp => nameOnlySlug(emp.name) === target);
+    if (match) return match;
+    
+    // Loose: slug contained in name+title slug
+    match = employees.find(emp => employeeSlug(emp.name, emp.title).includes(target) || target.includes(nameOnlySlug(emp.name)));
+    return match || null;
+}
+
+async function loadPersonalSignaturePage() {
+    const loader = document.getElementById('personalLoader');
+    const content = document.getElementById('personalContent');
+    const empty = document.getElementById('personalEmpty');
+    if (!loader || !content) return;
+    
+    const slug = parsePersonalSlugFromLocation();
+    const params = new URLSearchParams(window.location.search);
+    const formatParam = params.get('format') || params.get('f') || 'wellbound';
+    
+    if (!slug) {
+        loader.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${CONFIG.scriptUrl}?action=list`);
+        const employees = await response.json();
+        const emp = findEmployeeBySlug(employees, slug);
+        
+        loader.style.display = 'none';
+        
+        if (!emp) {
+            empty.style.display = 'block';
+            document.getElementById('personalPageSubtitle').textContent = 'No match for this link.';
+            return;
+        }
+        
+        currentPersonalEmployee = emp;
+        employeesCache = employees;
+        
+        document.title = `${emp.name} — Email Signature | Wellbound`;
+        document.getElementById('personalPageTitle').textContent = emp.name;
+        document.getElementById('personalPageSubtitle').textContent = 'Your ready-to-copy email signature';
+        document.getElementById('personalName').textContent = emp.name;
+        document.getElementById('personalTitle').textContent = emp.title || '';
+        
+        const avatar = document.getElementById('personalAvatar');
+        if (emp.imageUrl && avatar) {
+            avatar.src = emp.imageUrl;
+            avatar.style.display = 'block';
+        }
+        
+        const formatSelect = document.getElementById('personalFormatSelect');
+        if (formatSelect) {
+            formatSelect.value = FORMATS[formatParam] ? formatParam : 'wellbound';
+        }
+        
+        const linkHint = document.getElementById('personalLinkHint');
+        if (linkHint) {
+            linkHint.innerHTML = `<i class="fa-solid fa-link"></i> ${getPersonalSignatureUrl(emp, formatSelect?.value || 'wellbound')}`;
+        }
+        
+        content.style.display = 'block';
+        await updatePersonalSignature();
+    } catch (err) {
+        console.error(err);
+        loader.style.display = 'none';
+        empty.style.display = 'block';
+        showToast('Failed to load signature.', true);
+    }
+}
+
+async function updatePersonalSignature() {
+    if (!currentPersonalEmployee) return;
+    const format = document.getElementById('personalFormatSelect')?.value || 'wellbound';
+    const preview = document.getElementById('personalSignaturePreview');
+    if (!preview) return;
+    
+    preview.innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    
+    const signatureHtml = await generateSignatureHTML({
+        name: currentPersonalEmployee.name,
+        title: currentPersonalEmployee.title,
+        phone: currentPersonalEmployee.phone,
+        extension: currentPersonalEmployee.extension,
+        email: currentPersonalEmployee.email,
+        imageUrl: currentPersonalEmployee.imageUrl
+    }, format);
+    
+    preview.innerHTML = signatureHtml;
+    
+    const linkHint = document.getElementById('personalLinkHint');
+    if (linkHint) {
+        linkHint.innerHTML = `<i class="fa-solid fa-link"></i> ${getPersonalSignatureUrl(currentPersonalEmployee, format)}`;
+    }
+    
+    // Keep URL format param in sync without reload
+    try {
+        const url = new URL(window.location.href);
+        if (format === 'wellbound') url.searchParams.delete('format');
+        else url.searchParams.set('format', format);
+        if (!url.searchParams.get('u')) {
+            url.searchParams.set('u', employeeSlug(currentPersonalEmployee.name, currentPersonalEmployee.title));
+        }
+        history.replaceState(null, '', url.toString());
+    } catch (_) { /* ignore */ }
+}
+
+async function copyPersonalSignature() {
+    if (!currentPersonalEmployee) return;
+    const format = document.getElementById('personalFormatSelect')?.value || 'wellbound';
+    await prepareAndCopySignature({
+        previewId: 'personalSignaturePreview',
+        btnId: 'copyPersonalBtn',
+        buildData: {
+            name: currentPersonalEmployee.name,
+            title: currentPersonalEmployee.title,
+            phone: currentPersonalEmployee.phone,
+            extension: currentPersonalEmployee.extension,
+            email: currentPersonalEmployee.email,
+            imageUrl: currentPersonalEmployee.imageUrl
+        },
+        format
+    });
+}
+
+function copyPersonalLink(employee, format) {
+    const emp = employee || currentPersonalEmployee || currentModalEmployee;
+    if (!emp) {
+        showToast('No employee selected', true);
+        return;
+    }
+    const fmt = format || document.getElementById('personalFormatSelect')?.value
+        || document.getElementById('modalFormatSelect')?.value
+        || 'wellbound';
+    const url = getPersonalSignatureUrl(emp, fmt);
+    navigator.clipboard.writeText(url).then(() => {
+        showToast('Personal link copied!');
+    }).catch(() => {
+        showToast('Could not copy link', true);
+    });
+}
+
+// ========================================
 // Copy Functions
 // ========================================
 
@@ -1062,6 +1274,19 @@ function filterList() {
     renderEmployeeGrid(filtered);
 }
 
+function refreshModalPersonalLink(format) {
+    if (!currentModalEmployee) return;
+    const fmt = format || document.getElementById('modalFormatSelect')?.value || 'wellbound';
+    const url = getPersonalSignatureUrl(currentModalEmployee, fmt);
+    const hint = document.getElementById('modalPersonalLinkHint');
+    const openBtn = document.getElementById('openPersonalLinkBtn');
+    if (hint) {
+        hint.style.display = 'block';
+        hint.innerHTML = `<i class="fa-solid fa-link"></i> ${url}`;
+    }
+    if (openBtn) openBtn.href = url;
+}
+
 async function openSignatureModal(employee) {
     currentModalEmployee = employee;
     document.getElementById('signatureModal').classList.add('active');
@@ -1070,6 +1295,7 @@ async function openSignatureModal(employee) {
     // Reset format selector to default
     const formatSelect = document.getElementById('modalFormatSelect');
     if (formatSelect) formatSelect.value = 'wellbound';
+    refreshModalPersonalLink('wellbound');
     
     document.getElementById('modalSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
     
@@ -1088,6 +1314,7 @@ async function openSignatureModal(employee) {
 async function updateModalSignature() {
     if (!currentModalEmployee) return;
     const format = document.getElementById('modalFormatSelect')?.value || 'wellbound';
+    refreshModalPersonalLink(format);
     document.getElementById('modalSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
     const signatureHtml = await generateSignatureHTML({
         name: currentModalEmployee.name,

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Redirecting…</title>
+    <script>
+        (function () {
+            // Pretty personal signature URLs:
+            //   /office/s/karen-mayers-intake-specialist
+            //   /office/s/karen-mayers-intake-specialist?format=arista
+            // → s.html?u=karen-mayers-intake-specialist&format=arista
+            var base = '/office/';
+            var path = location.pathname || '';
+            var prefix = base + 's/';
+            var idx = path.indexOf(prefix);
+
+            if (idx !== -1) {
+                var slug = decodeURIComponent(path.slice(idx + prefix.length).replace(/\/+$/, ''));
+                if (slug) {
+                    var params = new URLSearchParams(location.search);
+                    params.set('u', slug);
+                    location.replace(base + 's.html?' + params.toString() + location.hash);
+                    return;
+                }
+            }
+
+            location.replace(base);
+        })();
+    </script>
+</head>
+<body>
+    <p style="font-family:system-ui,sans-serif;padding:40px;text-align:center;color:#666;">Redirecting…</p>
+</body>
+</html>

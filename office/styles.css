@@ -402,6 +402,27 @@ select option:disabled {
     justify-content: center;
 }
 
+.personal-link-hint {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    word-break: break-all;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.4;
+}
+
+.personal-link-hint i {
+    margin-top: 2px;
+    color: var(--accent-primary);
+    flex-shrink: 0;
+}
+
+.personal-sig-card {
+    max-width: 720px;
+}
+
 .image-preview {
     /* Keep for signature-format border preview under crop editor */
     margin-top: 4px;

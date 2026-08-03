@@ -90,7 +90,14 @@
                     <button class="btn btn-primary" id="copyModalBtn" onclick="copyModalSignature()">
                         <i class="fa-solid fa-copy"></i> Copy Signature
                     </button>
+                    <button class="btn btn-secondary" onclick="copyPersonalLink()">
+                        <i class="fa-solid fa-link"></i> Copy Personal Link
+                    </button>
+                    <a class="btn btn-secondary" id="openPersonalLinkBtn" href="#" target="_blank" rel="noopener" style="text-decoration:none;">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Link
+                    </a>
                 </div>
+                <p class="personal-link-hint" id="modalPersonalLinkHint" style="display:none;"></p>
             </div>
         </div>
     </div>
