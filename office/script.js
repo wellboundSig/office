@@ -726,7 +726,41 @@ async function generateSignature() {
 // Copy Functions
 // ========================================
 
-function copySignature() {
+/**
+ * Before every copy: rebuild signature with a TRUE circular PNG mask,
+ * then copy. Applies to Create, Directory modal, and Search.
+ */
+async function prepareAndCopySignature({ previewId, btnId, buildData, format }) {
+    const preview = document.getElementById(previewId);
+    const btn = btnId ? document.getElementById(btnId) : null;
+    if (!preview) return;
+    
+    const originalBtnHtml = btn ? btn.innerHTML : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparing circle...';
+    }
+    
+    try {
+        const signatureHtml = await generateSignatureHTML(buildData, format);
+        preview.innerHTML = signatureHtml;
+        
+        // Wait a tick so the browser paints the circular data-URI img
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        
+        await copyHtmlToClipboard(preview);
+    } catch (err) {
+        console.error('Copy prepare failed:', err);
+        showToast('Failed to prepare circular photo. Try again.', true);
+    } finally {
+        if (btn && originalBtnHtml) {
+            btn.disabled = false;
+            btn.innerHTML = originalBtnHtml;
+        }
+    }
+}
+
+async function copySignature() {
     const signaturePreview = document.getElementById('signaturePreview');
     
     if (signaturePreview.querySelector('.preview-placeholder')) {
@@ -734,48 +768,98 @@ function copySignature() {
         return;
     }
     
-    copyHtmlToClipboard(signaturePreview);
+    const formatSelect = document.getElementById('signatureFormat');
+    const format = formatSelect ? formatSelect.value : 'wellbound';
+    
+    await prepareAndCopySignature({
+        previewId: 'signaturePreview',
+        btnId: 'copyBtn',
+        buildData: null, // uses circularImageData from create page
+        format
+    });
 }
 
-function copyModalSignature() {
-    const signaturePreview = document.getElementById('modalSignaturePreview');
-    copyHtmlToClipboard(signaturePreview);
+async function copyModalSignature() {
+    if (!currentModalEmployee) {
+        showToast('No employee selected', true);
+        return;
+    }
+    
+    const format = document.getElementById('modalFormatSelect')?.value || 'wellbound';
+    
+    await prepareAndCopySignature({
+        previewId: 'modalSignaturePreview',
+        btnId: 'copyModalBtn',
+        buildData: {
+            name: currentModalEmployee.name,
+            title: currentModalEmployee.title,
+            phone: currentModalEmployee.phone,
+            extension: currentModalEmployee.extension,
+            email: currentModalEmployee.email,
+            imageUrl: currentModalEmployee.imageUrl
+        },
+        format
+    });
 }
 
-function copySearchSignature() {
-    const signaturePreview = document.getElementById('searchSignaturePreview');
-    copyHtmlToClipboard(signaturePreview);
+async function copySearchSignature() {
+    if (!currentSearchEmployee) {
+        showToast('No employee selected', true);
+        return;
+    }
+    
+    const format = document.getElementById('searchFormatSelect')?.value || 'wellbound';
+    
+    await prepareAndCopySignature({
+        previewId: 'searchSignaturePreview',
+        btnId: 'copySearchBtn',
+        buildData: {
+            name: currentSearchEmployee.name,
+            title: currentSearchEmployee.title,
+            phone: currentSearchEmployee.phone,
+            extension: currentSearchEmployee.extension,
+            email: currentSearchEmployee.email,
+            imageUrl: currentSearchEmployee.imageUrl
+        },
+        format
+    });
 }
 
 function copyHtmlToClipboard(element) {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    
-    const selection = window.getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-    
-    try {
-        const htmlContent = element.innerHTML;
-        const textContent = element.innerText;
+    return new Promise((resolve) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
         
-        const clipboardItem = new ClipboardItem({
-            'text/html': new Blob([htmlContent], { type: 'text/html' }),
-            'text/plain': new Blob([textContent], { type: 'text/plain' })
-        });
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
         
-        navigator.clipboard.write([clipboardItem]).then(() => {
-            showToast('Signature copied to clipboard!');
-        }).catch(() => {
+        try {
+            const htmlContent = element.innerHTML;
+            const textContent = element.innerText;
+            
+            const clipboardItem = new ClipboardItem({
+                'text/html': new Blob([htmlContent], { type: 'text/html' }),
+                'text/plain': new Blob([textContent], { type: 'text/plain' })
+            });
+            
+            navigator.clipboard.write([clipboardItem]).then(() => {
+                showToast('Signature copied to clipboard!');
+                selection.removeAllRanges();
+                resolve();
+            }).catch(() => {
+                document.execCommand('copy');
+                showToast('Signature copied to clipboard!');
+                selection.removeAllRanges();
+                resolve();
+            });
+        } catch (err) {
             document.execCommand('copy');
             showToast('Signature copied to clipboard!');
-        });
-    } catch (err) {
-        document.execCommand('copy');
-        showToast('Signature copied to clipboard!');
-    }
-    
-    selection.removeAllRanges();
+            selection.removeAllRanges();
+            resolve();
+        }
+    });
 }
 
 // ========================================
