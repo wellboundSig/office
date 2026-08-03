@@ -1,0 +1,8 @@
+name = "wellbound-signature-upload"
+main = "r2-worker.js"
+compatibility_date = "2024-01-01"
+account_id = "1e5002695c128115aa85aa46e7c87d5c"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "wellbound"

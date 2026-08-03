@@ -45,12 +45,32 @@
                 
                 <div class="form-group">
                     <label>Profile Image</label>
-                    <div class="image-upload" onclick="document.getElementById('imageInput').click()">
+                    <div class="image-upload" id="imageUploadZone" onclick="if(!document.getElementById('cropEditor')?.offsetParent) document.getElementById('imageInput').click()">
                         <input type="file" id="imageInput" accept="image/*" onchange="handleImageUpload(event)">
-                        <img id="imagePreview" class="image-preview">
+                        <img id="imagePreview" class="image-preview" alt="">
                         <div id="uploadPlaceholder">
                             <div class="upload-icon"><i class="fa-solid fa-camera"></i></div>
                             <div class="upload-text">Click to upload profile photo<br><small>(1" x 1", circular crop)</small></div>
+                        </div>
+                        <div id="cropEditor" class="crop-editor" style="display:none;" onclick="event.stopPropagation()">
+                            <canvas id="cropStage" class="crop-stage" width="220" height="220"></canvas>
+                            <p class="crop-hint"><i class="fa-solid fa-arrows-up-down-left-right"></i> Drag to center your face</p>
+                            <div class="crop-zoom-row">
+                                <label for="cropZoom"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom</label>
+                                <input type="range" id="cropZoom" min="1" max="3" step="0.05" value="1">
+                                <span id="cropZoomLabel">100%</span>
+                            </div>
+                            <div class="crop-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" id="cropResetBtn">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('imageInput').click()">
+                                    <i class="fa-solid fa-image"></i> Change
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="removeUploadedImage(event)">
+                                    <i class="fa-solid fa-xmark"></i> Remove
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

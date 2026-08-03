@@ -53,14 +53,28 @@
                         <div class="hr-drop-formats">Accepts JPG, PNG, WEBP</div>
                     </div>
                     <div id="hrPreviewContent" class="hr-preview-content" style="display:none;">
-                        <img id="hrImagePreview" class="hr-image-preview" alt="Preview">
+                        <div id="cropEditor" class="crop-editor">
+                            <canvas id="cropStage" class="crop-stage" width="220" height="220"></canvas>
+                            <p class="crop-hint"><i class="fa-solid fa-arrows-up-down-left-right"></i> Drag to center the face</p>
+                            <div class="crop-zoom-row">
+                                <label for="cropZoom"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom</label>
+                                <input type="range" id="cropZoom" min="1" max="3" step="0.05" value="1">
+                                <span id="cropZoomLabel">100%</span>
+                            </div>
+                            <div class="crop-actions">
+                                <button type="button" class="btn btn-secondary btn-sm" id="cropResetBtn">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm hr-remove-btn" onclick="hrRemoveImage(event)">
+                                    <i class="fa-solid fa-xmark"></i> Remove
+                                </button>
+                            </div>
+                        </div>
                         <div class="hr-preview-info">
                             <span id="hrOriginalName" class="hr-original-name"></span>
                             <span id="hrFileSize" class="hr-file-size"></span>
                         </div>
-                        <button class="btn btn-secondary btn-sm hr-remove-btn" onclick="hrRemoveImage(event)">
-                            <i class="fa-solid fa-xmark"></i> Remove
-                        </button>
+                        <img id="hrImagePreview" class="hr-image-preview" alt="Preview" style="display:none;">
                     </div>
                 </div>
             </div>
@@ -152,8 +166,19 @@
 
         dropzone.addEventListener('click', function(e) {
             if (e.target.closest('.hr-remove-btn')) return;
+            if (e.target.closest('#cropEditor')) return; // don't reopen picker while cropping
+            if (document.getElementById('hrPreviewContent').style.display !== 'none') return;
             fileInput.click();
         });
+        
+        // When crop pan/zoom updates, keep HR upload file in sync
+        window.onCropFileReady = function(circularFile) {
+            if (circularFile) {
+                hrSelectedFile = circularFile;
+                const sizeEl = document.getElementById('hrFileSize');
+                if (sizeEl) sizeEl.textContent = formatFileSize(circularFile.size) + ' (circular PNG)';
+            }
+        };
 
         fileInput.addEventListener('change', function(e) {
             if (e.target.files.length) {
@@ -187,45 +212,34 @@
         });
 
         function hrHandleFile(file) {
-            hrSelectedFile = file;
-
-            // Show circular preview + prepare circular PNG for upload
             const reader = new FileReader();
             reader.onload = function(e) {
-                createCircularImage(e.target.result, function(circularData) {
-                    if (circularData) {
-                        document.getElementById('hrImagePreview').src = circularData;
-                    } else {
-                        document.getElementById('hrImagePreview').src = e.target.result;
-                    }
-                }, '#561640');
-
-                // Convert to true circular PNG (transparent outside circle) for R2
-                createCircularUploadFile(e.target.result, function(circularFile) {
-                    if (circularFile) {
-                        hrSelectedFile = circularFile;
-                        document.getElementById('hrFileSize').textContent = formatFileSize(circularFile.size) + ' (circular PNG)';
-                    }
-                });
-
+                uploadedImageData = e.target.result;
+                resetCropState();
+                
                 document.getElementById('hrOriginalName').textContent = file.name;
                 document.getElementById('hrFileSize').textContent = formatFileSize(file.size);
                 document.getElementById('hrDropContent').style.display = 'none';
                 document.getElementById('hrPreviewContent').style.display = 'flex';
+                
+                initCropEditor();
+                refreshCroppedImage();
             };
             reader.readAsDataURL(file);
-
             updateFileNamePreview();
         }
 
         function hrRemoveImage(e) {
             e.stopPropagation();
             hrSelectedFile = null;
+            uploadedImageData = null;
+            resetCropState();
             fileInput.value = '';
             document.getElementById('hrDropContent').style.display = 'flex';
             document.getElementById('hrPreviewContent').style.display = 'none';
             updateFileNamePreview();
         }
+        
 
         function formatFileSize(bytes) {
             if (bytes < 1024) return bytes + ' B';

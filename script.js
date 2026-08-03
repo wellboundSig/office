@@ -116,6 +116,11 @@ let extensionsCache = [];  // Stores phone extensions data
 let currentModalEmployee = null;  // Stores employee for modal format toggle
 let currentSearchEmployee = null;  // Stores employee for search format toggle
 
+// Crop positioning: pan (offsetX/Y -1..1) + zoom (>=1) so users can center faces
+let cropState = { offsetX: 0, offsetY: 0, zoom: 1 };
+let cropDrag = null;  // { startX, startY, startOffsetX, startOffsetY }
+let cropRefreshTimer = null;
+
 // ========================================
 // Image Handling
 // ========================================
@@ -135,7 +140,28 @@ function toCorsSafeImageUrl(imgSrc) {
     return `${CONFIG.uploadUrl}?key=${encodeURIComponent(key)}`;
 }
 
-function createCircularImage(imgSrc, callback, borderColor) {
+/**
+ * Compute draw rect for a circular crop given pan/zoom.
+ * offsetX/Y in [-1, 1], zoom >= 1 (1 = cover-fit).
+ */
+function getCropDrawRect(imgW, imgH, canvasSize, crop = cropState) {
+    const zoom = Math.max(1, crop.zoom || 1);
+    const coverScale = Math.max(canvasSize / imgW, canvasSize / imgH) * zoom;
+    const w = imgW * coverScale;
+    const h = imgH * coverScale;
+    const maxOffsetX = Math.max(0, (w - canvasSize) / 2);
+    const maxOffsetY = Math.max(0, (h - canvasSize) / 2);
+    const ox = Math.max(-1, Math.min(1, crop.offsetX || 0));
+    const oy = Math.max(-1, Math.min(1, crop.offsetY || 0));
+    return {
+        x: (canvasSize - w) / 2 + ox * maxOffsetX,
+        y: (canvasSize - h) / 2 + oy * maxOffsetY,
+        w,
+        h
+    };
+}
+
+function createCircularImage(imgSrc, callback, borderColor, crop = cropState) {
     if (!borderColor) {
         const formatSelect = document.getElementById('signatureFormat');
         const format = formatSelect ? formatSelect.value : 'wellbound';
@@ -168,17 +194,16 @@ function createCircularImage(imgSrc, callback, borderColor) {
         ctx.fillStyle = borderColor;
         ctx.fill();
         
-        // Draw photo clipped to inner circle
+        // Draw photo clipped to inner circle (with user pan/zoom)
         ctx.save();
         ctx.beginPath();
         ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
         
-        const scale = Math.max(size / img.width, size / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (totalSize - w) / 2, (totalSize - h) / 2, w, h);
+        const rect = getCropDrawRect(img.width, img.height, totalSize, crop);
+        // Center of photo area is same as canvas center for totalSize
+        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
         ctx.restore();
         
         // Force-erase every pixel outside the outer circle (true alpha mask).
@@ -204,9 +229,11 @@ function createCircularImage(imgSrc, callback, borderColor) {
     img.src = safeSrc;
 }
 
-function createCircularImageAsync(imgSrc, borderColor) {
+function createCircularImageAsync(imgSrc, borderColor, crop) {
+    // Remote/directory photos use centered crop unless explicitly overridden
+    const cropOpts = crop || { offsetX: 0, offsetY: 0, zoom: 1 };
     return new Promise((resolve) => {
-        createCircularImage(imgSrc, resolve, borderColor);
+        createCircularImage(imgSrc, resolve, borderColor, cropOpts);
     });
 }
 
@@ -257,8 +284,9 @@ function createNoPhotoCircleAsync(borderColor, textColor) {
 /**
  * Circular PNG for R2 storage (no format border — border is applied at signature time).
  * Transparent outside the circle so Outlook never sees square corners.
+ * Uses current cropState pan/zoom.
  */
-function createCircularUploadFile(imgSrc, callback) {
+function createCircularUploadFile(imgSrc, callback, crop = cropState) {
     const img = new Image();
     if (imgSrc && !imgSrc.startsWith('data:')) {
         img.crossOrigin = 'anonymous';
@@ -272,17 +300,15 @@ function createCircularUploadFile(imgSrc, callback) {
         
         ctx.clearRect(0, 0, size, size);
         
-        // Clip to circle and draw photo
+        // Clip to circle and draw photo with pan/zoom
         ctx.save();
         ctx.beginPath();
         ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
         ctx.closePath();
         ctx.clip();
         
-        const scale = Math.max(size / img.width, size / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        const rect = getCropDrawRect(img.width, img.height, size, crop);
+        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
         ctx.restore();
         
         // Hard alpha mask — no square pixels remain
@@ -309,35 +335,213 @@ function createCircularUploadFile(imgSrc, callback) {
     img.src = imgSrc;
 }
 
+function resetCropState() {
+    cropState = { offsetX: 0, offsetY: 0, zoom: 1 };
+    const zoomSlider = document.getElementById('cropZoom');
+    if (zoomSlider) zoomSlider.value = '1';
+    const zoomLabel = document.getElementById('cropZoomLabel');
+    if (zoomLabel) zoomLabel.textContent = '100%';
+}
+
+function getActiveBorderColor() {
+    const formatSelect = document.getElementById('signatureFormat') || document.getElementById('modalFormatSelect') || document.getElementById('searchFormatSelect');
+    const format = formatSelect ? formatSelect.value : 'wellbound';
+    return (FORMATS[format] || FORMATS.wellbound).borderColor;
+}
+
+/** Rebuild circular preview + upload file from current cropState. */
+function refreshCroppedImage() {
+    if (!uploadedImageData) return;
+    
+    uploadedR2Url = null; // crop changed → need re-upload
+    
+    const borderColor = getActiveBorderColor();
+    createCircularImage(uploadedImageData, function(circularData) {
+        circularImageData = circularData;
+        const preview = document.getElementById('imagePreview');
+        if (preview && circularData) {
+            preview.src = circularData;
+            preview.style.display = 'block';
+        }
+        // Live crop stage preview
+        renderCropStage();
+    }, borderColor);
+    
+    createCircularUploadFile(uploadedImageData, function(circularFile) {
+        currentImageFile = circularFile;
+        // HR page (and others) can hook into crop updates
+        if (typeof window.onCropFileReady === 'function') {
+            window.onCropFileReady(circularFile);
+        }
+    });
+    
+    // Update signature preview if already generated
+    const signaturePreview = document.getElementById('signaturePreview');
+    if (signaturePreview && !signaturePreview.querySelector('.preview-placeholder')) {
+        clearTimeout(cropRefreshTimer);
+        cropRefreshTimer = setTimeout(() => generateSignature(), 150);
+    }
+}
+
+/** Draw the interactive crop stage (full image + circular mask overlay). */
+function renderCropStage() {
+    const canvas = document.getElementById('cropStage');
+    if (!canvas || !uploadedImageData) return;
+    
+    const img = new Image();
+    img.onload = function() {
+        const size = canvas.width;
+        const ctx = canvas.getContext('2d');
+        const borderColor = getActiveBorderColor();
+        
+        ctx.clearRect(0, 0, size, size);
+        
+        // Dim full image background
+        const rect = getCropDrawRect(img.width, img.height, size, cropState);
+        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+        
+        // Darken outside the circle
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(0, 0, size, size);
+        
+        // Punch out the circle to show the crop clearly
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        
+        // Redraw the image inside the circle only
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+        ctx.restore();
+        
+        // Border ring
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2 - 2, 0, Math.PI * 2);
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    };
+    img.src = uploadedImageData;
+}
+
+function showCropEditor() {
+    const editor = document.getElementById('cropEditor');
+    const placeholder = document.getElementById('uploadPlaceholder');
+    const uploadZone = document.getElementById('imageUploadZone');
+    if (editor) editor.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+    if (uploadZone) uploadZone.classList.add('has-crop');
+    renderCropStage();
+}
+
+function hideCropEditor() {
+    const editor = document.getElementById('cropEditor');
+    const placeholder = document.getElementById('uploadPlaceholder');
+    const preview = document.getElementById('imagePreview');
+    const uploadZone = document.getElementById('imageUploadZone');
+    if (editor) editor.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'block';
+    if (preview) {
+        preview.style.display = 'none';
+        preview.src = '';
+    }
+    if (uploadZone) uploadZone.classList.remove('has-crop');
+}
+
 function handleImageUpload(event) {
     const file = event.target.files[0];
     if (file) {
-        uploadedR2Url = null;  // Reset any previous URL
+        uploadedR2Url = null;
+        resetCropState();
         
         const reader = new FileReader();
         reader.onload = function(e) {
             uploadedImageData = e.target.result;
             hasImage = true;
-            
-            // Prepare circular PNG for R2 upload (transparent outside circle)
-            createCircularUploadFile(e.target.result, function(circularFile) {
-                currentImageFile = circularFile;
-            });
-            
-            createCircularImage(uploadedImageData, function(circularData) {
-                circularImageData = circularData;
-                
-                const preview = document.getElementById('imagePreview');
-                const placeholder = document.getElementById('uploadPlaceholder');
-                
-                if (preview && placeholder) {
-                    preview.src = circularData;
-                    preview.style.display = 'block';
-                    placeholder.style.display = 'none';
-                }
-            });
+            showCropEditor();
+            refreshCroppedImage();
         };
         reader.readAsDataURL(file);
+    }
+}
+
+function removeUploadedImage(event) {
+    if (event) event.stopPropagation();
+    uploadedImageData = null;
+    circularImageData = null;
+    currentImageFile = null;
+    uploadedR2Url = null;
+    hasImage = false;
+    resetCropState();
+    hideCropEditor();
+    const input = document.getElementById('imageInput');
+    if (input) input.value = '';
+}
+
+function initCropEditor() {
+    const canvas = document.getElementById('cropStage');
+    const zoomSlider = document.getElementById('cropZoom');
+    if (!canvas || canvas.dataset.cropInit === '1') return;
+    canvas.dataset.cropInit = '1';
+    
+    // Drag to pan
+    canvas.addEventListener('pointerdown', function(e) {
+        e.preventDefault();
+        canvas.setPointerCapture(e.pointerId);
+        cropDrag = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startOffsetX: cropState.offsetX,
+            startOffsetY: cropState.offsetY
+        };
+        canvas.classList.add('dragging');
+    });
+    
+    canvas.addEventListener('pointermove', function(e) {
+        if (!cropDrag) return;
+        e.preventDefault();
+        // Sensitivity: drag distance relative to canvas size
+        const dx = (e.clientX - cropDrag.startX) / (canvas.clientWidth / 2);
+        const dy = (e.clientY - cropDrag.startY) / (canvas.clientHeight / 2);
+        cropState.offsetX = Math.max(-1, Math.min(1, cropDrag.startOffsetX + dx));
+        cropState.offsetY = Math.max(-1, Math.min(1, cropDrag.startOffsetY + dy));
+        renderCropStage();
+    });
+    
+    function endDrag(e) {
+        if (!cropDrag) return;
+        cropDrag = null;
+        canvas.classList.remove('dragging');
+        refreshCroppedImage();
+    }
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+    
+    if (zoomSlider) {
+        zoomSlider.addEventListener('input', function() {
+            cropState.zoom = parseFloat(this.value) || 1;
+            const label = document.getElementById('cropZoomLabel');
+            if (label) label.textContent = Math.round(cropState.zoom * 100) + '%';
+            renderCropStage();
+        });
+        zoomSlider.addEventListener('change', function() {
+            refreshCroppedImage();
+        });
+    }
+    
+    const resetBtn = document.getElementById('cropResetBtn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            resetCropState();
+            refreshCroppedImage();
+        });
     }
 }
 
@@ -1080,23 +1284,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const formatSelect = document.getElementById('signatureFormat');
     if (formatSelect) {
         formatSelect.addEventListener('change', function() {
-            const format = this.value;
-            const borderColor = (FORMATS[format] || FORMATS.wellbound).borderColor;
-            
-            // Re-create circular image preview with new border color
+            // Re-create circular image with new border color, keeping crop position
             if (uploadedImageData) {
-                createCircularImage(uploadedImageData, function(circularData) {
-                    circularImageData = circularData;
-                    const preview = document.getElementById('imagePreview');
-                    if (preview) preview.src = circularData;
-                }, borderColor);
-            }
-            
-            // Re-generate signature preview if one exists
-            const signaturePreview = document.getElementById('signaturePreview');
-            if (signaturePreview && !signaturePreview.querySelector('.preview-placeholder')) {
-                generateSignature();
+                refreshCroppedImage();
+            } else {
+                const signaturePreview = document.getElementById('signaturePreview');
+                if (signaturePreview && !signaturePreview.querySelector('.preview-placeholder')) {
+                    generateSignature();
+                }
             }
         });
     }
+    
+    // Interactive crop editor (drag to center + zoom)
+    initCropEditor();
 });
