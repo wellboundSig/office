@@ -6,8 +6,70 @@
 const CONFIG = {
     scriptUrl: 'https://script.google.com/macros/s/AKfycbwsGu0uuWKp0t4fwuC0zyEuPHzMaMMrJZOte6FTrRIdZL7MVLkS5kGm3mhU_8f1nCD3/exec',
     uploadUrl: 'https://wellbound-signature-upload.support-1e5.workers.dev',
-    r2PublicBase: 'https://pub-d7fda00c74254211bfe47adcb51427b0.r2.dev'
+    r2PublicBase: 'https://pub-d7fda00c74254211bfe47adcb51427b0.r2.dev',
+    // Workforce directory (wellbound-api, public read: name/title/phone/photo
+    // only; revoked staff are excluded). The Employees sheet above stays as
+    // the fallback and is merged in for anyone not yet in the directory.
+    apiUrl: 'https://wzfb4i68yh.execute-api.us-east-2.amazonaws.com'
 };
+
+// ========================================
+// Directory source: API first, sheet fallback, revoked hidden
+// ========================================
+
+let directoryPromise = null;
+
+async function fetchJsonOrNull(url) {
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Employees for the list + personal pages. Shape matches the sheet's
+ * ?action=list rows: { name, title, phone, extension, email, imageUrl }.
+ */
+function loadDirectory(force) {
+    if (directoryPromise && !force) return directoryPromise;
+    directoryPromise = (async () => {
+        const [apiRows, hidden, sheetRows] = await Promise.all([
+            fetchJsonOrNull(`${CONFIG.apiUrl}/public/signatures`),
+            fetchJsonOrNull(`${CONFIG.apiUrl}/public/signatures/_hidden`),
+            fetchJsonOrNull(`${CONFIG.scriptUrl}?action=list`)
+        ]);
+        const hiddenSet = new Set(((hidden && hidden.slugs) || []).map(s => String(s).toLowerCase()));
+        const out = [];
+        const seen = new Set();
+        const push = (row) => {
+            if (!row || !row.name) return;
+            const slug = employeeSlug(row.name, row.title);
+            if (hiddenSet.has(slug) || hiddenSet.has(nameOnlySlug(row.name))) return;
+            const key = (row.email && String(row.email).toLowerCase()) || slug;
+            if (seen.has(key)) return;
+            seen.add(key);
+            out.push(row);
+        };
+        (Array.isArray(apiRows) ? apiRows : []).forEach(push);
+        (Array.isArray(sheetRows) ? sheetRows : []).forEach(push);
+        if (!Array.isArray(apiRows) && !Array.isArray(sheetRows)) throw new Error('Directory unavailable');
+        out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        return out;
+    })();
+    directoryPromise.catch(() => { directoryPromise = null; });
+    return directoryPromise;
+}
+
+/** Personal page: ask the API for the slug first (old links resolve to the current signature). */
+async function resolveEmployeeBySlug(slug) {
+    const direct = await fetchJsonOrNull(`${CONFIG.apiUrl}/public/signatures/${encodeURIComponent(slug)}`);
+    if (direct && direct.name) return direct;
+    const employees = await loadDirectory();
+    return findEmployeeBySlug(employees, slug);
+}
 
 // Signature Format Configurations
 const FORMATS = {
@@ -829,9 +891,8 @@ async function loadPersonalSignaturePage() {
     }
     
     try {
-        const response = await fetch(`${CONFIG.scriptUrl}?action=list`);
-        const employees = await response.json();
-        const emp = findEmployeeBySlug(employees, slug);
+        const emp = await resolveEmployeeBySlug(slug);
+        const employees = employeesCache && employeesCache.length ? employeesCache : (emp ? [emp] : []);
         
         loader.style.display = 'none';
         
@@ -1198,8 +1259,7 @@ async function loadEmployees() {
     empty.style.display = 'none';
     
     try {
-        const response = await fetch(`${CONFIG.scriptUrl}?action=list`);
-        const employees = await response.json();
+        const employees = await loadDirectory(true);
         
         employeesCache = employees;
         
