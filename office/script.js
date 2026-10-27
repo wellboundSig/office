@@ -4,17 +4,17 @@
 
 // Configuration
 const CONFIG = {
-    scriptUrl: 'https://script.google.com/macros/s/AKfycbwsGu0uuWKp0t4fwuC0zyEuPHzMaMMrJZOte6FTrRIdZL7MVLkS5kGm3mhU_8f1nCD3/exec',
     uploadUrl: 'https://wellbound-signature-upload.support-1e5.workers.dev',
     r2PublicBase: 'https://pub-d7fda00c74254211bfe47adcb51427b0.r2.dev',
     // Workforce directory (wellbound-api, public read: name/title/phone/photo
-    // only; revoked staff are excluded). The Employees sheet above stays as
-    // the fallback and is merged in for anyone not yet in the directory.
-    apiUrl: 'https://wzfb4i68yh.execute-api.us-east-2.amazonaws.com'
+    // only; revoked staff are excluded). The Google Sheet is retired; people
+    // are added through the HR Onboarding portal.
+    apiUrl: 'https://wzfb4i68yh.execute-api.us-east-2.amazonaws.com',
+    onboardingUrl: 'https://onboarding.wellboundcarestream.com'
 };
 
 // ========================================
-// Directory source: API first, sheet fallback, revoked hidden
+// Directory source: wellbound-api (revoked staff never returned)
 // ========================================
 
 let directoryPromise = null;
@@ -30,32 +30,23 @@ async function fetchJsonOrNull(url) {
 }
 
 /**
- * Employees for the list + personal pages. Shape matches the sheet's
- * ?action=list rows: { name, title, phone, extension, email, imageUrl }.
+ * Employees for the list, search, extensions and personal pages.
+ * Rows: { slug, name, title, phone, extension, email, imageUrl }.
  */
 function loadDirectory(force) {
     if (directoryPromise && !force) return directoryPromise;
     directoryPromise = (async () => {
-        const [apiRows, hidden, sheetRows] = await Promise.all([
-            fetchJsonOrNull(`${CONFIG.apiUrl}/public/signatures`),
-            fetchJsonOrNull(`${CONFIG.apiUrl}/public/signatures/_hidden`),
-            fetchJsonOrNull(`${CONFIG.scriptUrl}?action=list`)
-        ]);
-        const hiddenSet = new Set(((hidden && hidden.slugs) || []).map(s => String(s).toLowerCase()));
+        const apiRows = await fetchJsonOrNull(`${CONFIG.apiUrl}/public/signatures`);
+        if (!Array.isArray(apiRows)) throw new Error('Directory unavailable');
         const out = [];
         const seen = new Set();
-        const push = (row) => {
+        apiRows.forEach(row => {
             if (!row || !row.name) return;
-            const slug = employeeSlug(row.name, row.title);
-            if (hiddenSet.has(slug) || hiddenSet.has(nameOnlySlug(row.name))) return;
-            const key = (row.email && String(row.email).toLowerCase()) || slug;
+            const key = (row.email && String(row.email).toLowerCase()) || row.slug || employeeSlug(row.name, row.title);
             if (seen.has(key)) return;
             seen.add(key);
             out.push(row);
-        };
-        (Array.isArray(apiRows) ? apiRows : []).forEach(push);
-        (Array.isArray(sheetRows) ? sheetRows : []).forEach(push);
-        if (!Array.isArray(apiRows) && !Array.isArray(sheetRows)) throw new Error('Directory unavailable');
+        });
         out.sort((a, b) => String(a.name).localeCompare(String(b.name)));
         return out;
     })();
@@ -1184,63 +1175,25 @@ function closeModal() {
 }
 
 async function addToDatabase() {
-    const name = document.getElementById('workerName').value;
-    const title = document.getElementById('jobTitle').value;
-    const phone = document.getElementById('phoneNumber').value;
-    const ext = document.getElementById('extension').value;
-    const email = document.getElementById('email').value;
-    
-    // Show loader
-    document.getElementById('modalLoader').classList.add('active');
-    const loaderText = document.querySelector('#modalLoader p');
-    
-    let imageUrl = '';
-    
-    // If there's an image, upload it to R2 first
-    if (hasImage && currentImageFile) {
-        try {
-            if (loaderText) loaderText.textContent = 'Uploading image to cloud...';
-            imageUrl = await uploadImageToR2();
-            if (loaderText) loaderText.textContent = 'Adding to database...';
-        } catch (error) {
-            console.error('Image upload failed:', error);
-            showToast('Image upload failed. Adding without image.', true);
-            imageUrl = '';
-        }
+    // The Employees sheet is retired. New staff are created through the HR
+    // Onboarding portal, which builds the signature profile (and this page's
+    // link) automatically; IT edits people in Support → Users.
+    const modalContent = document.getElementById('modalContent');
+    if (modalContent) {
+        modalContent.innerHTML = `
+            <p>Signature profiles are now created automatically when HR submits a new hire in the
+            <a href="${CONFIG.onboardingUrl}" target="_blank" rel="noopener">Onboarding portal</a>.
+            Existing people are edited by IT in Support → Users.</p>
+            <div class="modal-actions">
+                <a class="btn btn-primary" href="${CONFIG.onboardingUrl}" target="_blank" rel="noopener">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Onboarding
+                </a>
+                <button class="btn btn-secondary" onclick="closeModal()">
+                    <i class="fa-solid fa-xmark"></i> Close
+                </button>
+            </div>`;
     }
-    
-    const data = {
-        action: 'add',
-        name: name,
-        title: title,
-        phone: phone,
-        extension: ext,
-        email: email,
-        imageUrl: imageUrl
-    };
-    
-    try {
-        const response = await fetch(CONFIG.scriptUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        });
-        
-        // Since no-cors doesn't return response, assume success
-        showToast('Employee added to database!');
-        closeModal();
-        
-        // Reset image state after successful add
-        uploadedR2Url = null;
-        currentImageFile = null;
-    } catch (error) {
-        console.error('Error:', error);
-        showToast('Failed to add to database. Check console.', true);
-        document.getElementById('modalLoader').classList.remove('active');
-    }
+    document.getElementById('modalLoader').classList.remove('active');
 }
 
 // ========================================
@@ -1431,8 +1384,14 @@ async function searchEmployee() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Searching...';
     
     try {
-        const response = await fetch(`${CONFIG.scriptUrl}?action=search&firstName=${encodeURIComponent(firstName)}&lastName=${encodeURIComponent(lastName)}`);
-        const data = await response.json();
+        const employees = await loadDirectory();
+        const f = firstName.trim().toLowerCase();
+        const l = lastName.trim().toLowerCase();
+        const match = employees.find(e => {
+            const parts = String(e.name || '').toLowerCase().split(/\s+/);
+            return parts[0] === f && parts[parts.length - 1] === l;
+        }) || employees.find(e => String(e.name || '').toLowerCase() === `${f} ${l}`);
+        const data = match ? { found: true, employee: match } : { found: false };
         
         loader.style.display = 'none';
         btn.disabled = false;
@@ -1506,8 +1465,11 @@ async function loadExtensions() {
     empty.style.display = 'none';
     
     try {
-        const response = await fetch(`${CONFIG.scriptUrl}?action=extensions`);
-        const extensions = await response.json();
+        const employees = await loadDirectory();
+        const extensions = employees
+            .filter(e => e.extension && String(e.extension).trim())
+            .map(e => ({ extension: String(e.extension).trim(), name: e.name, outboundName: e.title || '' }))
+            .sort((a, b) => (parseInt(a.extension, 10) || 0) - (parseInt(b.extension, 10) || 0));
         
         extensionsCache = extensions;
         
