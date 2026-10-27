@@ -666,7 +666,7 @@ async function generateSignatureHTML(data = null, format = null) {
     let phone = data?.phone || document.getElementById('phoneNumber')?.value || '718.400.WELL (9355)';
     if (fmt.phoneOverride) phone = fmt.phoneOverride;
     const ext = data?.extension || document.getElementById('extension')?.value || '000';
-    const fax = document.getElementById('fax')?.value || '718.766.2109';
+    const fax = data?.fax || (!data && document.getElementById('fax')?.value) || '718.766.2109';
     const email = data?.email || document.getElementById('email')?.value || 'email@wellboundhc.com';
     const address = '7424 13th Avenue | Brooklyn, NY 11228';
     const imageUrl = data?.imageUrl || null;
