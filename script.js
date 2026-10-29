@@ -653,7 +653,53 @@ async function uploadImageToR2() {
 // Signature Generation
 // ========================================
 
+function isFieldStaff(data) {
+    return String(data?.staffType || '').toUpperCase() === 'FIELD';
+}
+
+function signaturePayload(emp) {
+    return {
+        name: emp?.name,
+        title: emp?.title,
+        phone: emp?.phone,
+        extension: emp?.extension,
+        fax: emp?.fax,
+        email: emp?.email,
+        imageUrl: emp?.imageUrl,
+        staffType: emp?.staffType,
+    };
+}
+
+/** Clinician signatures are plain text: name, title, agency, phone, email. */
+function fieldSignatureText(data) {
+    const lines = [
+        data?.name || '',
+        data?.title || '',
+        'Wellbound Certified Home Health Agency',
+    ];
+    const phone = String(data?.phone || '').trim();
+    const email = String(data?.email || '').trim();
+    if (phone) lines.push(`Phone | ${phone}`);
+    if (email) lines.push(`Email | ${email}`);
+    return lines.join('\n');
+}
+
+function fieldSignatureHtml(data) {
+    const text = fieldSignatureText(data)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    return `<pre style="font-family:Calibri,Arial,sans-serif;font-size:14px;line-height:1.35;color:#000000;background:transparent;margin:0;white-space:pre-wrap;border:0;">${text}</pre>`;
+}
+
+function setFormatVisible(selectId, visible) {
+    const select = document.getElementById(selectId);
+    const wrap = select?.closest('.format-toggle');
+    if (wrap) wrap.style.display = visible ? '' : 'none';
+}
+
 async function generateSignatureHTML(data = null, format = null) {
+    if (isFieldStaff(data)) return fieldSignatureHtml(data);
     // Determine format
     if (!format) {
         const formatSelect = document.getElementById('signatureFormat');
@@ -902,11 +948,15 @@ async function loadPersonalSignaturePage() {
         document.getElementById('personalName').textContent = emp.name;
         document.getElementById('personalTitle').textContent = emp.title || '';
         
+        const field = isFieldStaff(emp);
         const avatar = document.getElementById('personalAvatar');
-        if (emp.imageUrl && avatar) {
+        if (!field && emp.imageUrl && avatar) {
             avatar.src = emp.imageUrl;
             avatar.style.display = 'block';
+        } else if (avatar) {
+            avatar.style.display = 'none';
         }
+        setFormatVisible('personalFormatSelect', !field);
         
         const formatSelect = document.getElementById('personalFormatSelect');
         if (formatSelect) {
@@ -934,16 +984,11 @@ async function updatePersonalSignature() {
     const preview = document.getElementById('personalSignaturePreview');
     if (!preview) return;
     
-    preview.innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    preview.innerHTML = isFieldStaff(currentPersonalEmployee)
+        ? ''
+        : '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
     
-    const signatureHtml = await generateSignatureHTML({
-        name: currentPersonalEmployee.name,
-        title: currentPersonalEmployee.title,
-        phone: currentPersonalEmployee.phone,
-        extension: currentPersonalEmployee.extension,
-        email: currentPersonalEmployee.email,
-        imageUrl: currentPersonalEmployee.imageUrl
-    }, format);
+    const signatureHtml = await generateSignatureHTML(signaturePayload(currentPersonalEmployee), format);
     
     preview.innerHTML = signatureHtml;
     
@@ -970,14 +1015,7 @@ async function copyPersonalSignature() {
     await prepareAndCopySignature({
         previewId: 'personalSignaturePreview',
         btnId: 'copyPersonalBtn',
-        buildData: {
-            name: currentPersonalEmployee.name,
-            title: currentPersonalEmployee.title,
-            phone: currentPersonalEmployee.phone,
-            extension: currentPersonalEmployee.extension,
-            email: currentPersonalEmployee.email,
-            imageUrl: currentPersonalEmployee.imageUrl
-        },
+        buildData: signaturePayload(currentPersonalEmployee),
         format
     });
 }
@@ -1013,12 +1051,22 @@ async function prepareAndCopySignature({ previewId, btnId, buildData, format }) 
     if (!preview) return;
     
     const originalBtnHtml = btn ? btn.innerHTML : null;
+    const field = isFieldStaff(buildData);
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Preparing circle...';
+        btn.innerHTML = field
+            ? '<i class="fa-solid fa-spinner fa-spin"></i> Copying...'
+            : '<i class="fa-solid fa-spinner fa-spin"></i> Preparing circle...';
     }
     
     try {
+        if (field) {
+            const text = fieldSignatureText(buildData);
+            preview.innerHTML = fieldSignatureHtml(buildData);
+            await navigator.clipboard.writeText(text);
+            showToast('Signature copied');
+            return;
+        }
         const signatureHtml = await generateSignatureHTML(buildData, format);
         preview.innerHTML = signatureHtml;
         
@@ -1028,7 +1076,7 @@ async function prepareAndCopySignature({ previewId, btnId, buildData, format }) 
         await copyHtmlToClipboard(preview);
     } catch (err) {
         console.error('Copy prepare failed:', err);
-        showToast('Failed to prepare circular photo. Try again.', true);
+        showToast(field ? 'Could not copy the signature. Try again.' : 'Failed to prepare circular photo. Try again.', true);
     } finally {
         if (btn && originalBtnHtml) {
             btn.disabled = false;
@@ -1067,14 +1115,7 @@ async function copyModalSignature() {
     await prepareAndCopySignature({
         previewId: 'modalSignaturePreview',
         btnId: 'copyModalBtn',
-        buildData: {
-            name: currentModalEmployee.name,
-            title: currentModalEmployee.title,
-            phone: currentModalEmployee.phone,
-            extension: currentModalEmployee.extension,
-            email: currentModalEmployee.email,
-            imageUrl: currentModalEmployee.imageUrl
-        },
+        buildData: signaturePayload(currentModalEmployee),
         format
     });
 }
@@ -1090,14 +1131,7 @@ async function copySearchSignature() {
     await prepareAndCopySignature({
         previewId: 'searchSignaturePreview',
         btnId: 'copySearchBtn',
-        buildData: {
-            name: currentSearchEmployee.name,
-            title: currentSearchEmployee.title,
-            phone: currentSearchEmployee.phone,
-            extension: currentSearchEmployee.extension,
-            email: currentSearchEmployee.email,
-            imageUrl: currentSearchEmployee.imageUrl
-        },
+        buildData: signaturePayload(currentSearchEmployee),
         format
     });
 }
@@ -1251,9 +1285,13 @@ function renderEmployeeGrid(employees) {
         card.className = 'employee-card';
         card.onclick = () => openSignatureModal(emp);
         
-        const avatarHtml = emp.imageUrl 
+        const field = isFieldStaff(emp);
+        const avatarHtml = !field && emp.imageUrl
             ? `<img src="${emp.imageUrl}" class="employee-avatar" alt="${emp.name}" onerror="this.outerHTML='<div class=\\'employee-avatar-placeholder\\'><i class=\\'fa-solid fa-user\\'></i></div>'">`
             : `<div class="employee-avatar-placeholder"><i class="fa-solid fa-user"></i></div>`;
+        const phoneLine = field
+            ? (emp.phone ? `<p><i class="fa-solid fa-phone"></i> ${emp.phone}</p>` : '')
+            : `<p><i class="fa-solid fa-phone"></i> ${emp.phone} Ext. ${emp.extension}</p>`;
         
         card.innerHTML = `
             <div class="employee-card-header">
@@ -1264,7 +1302,7 @@ function renderEmployeeGrid(employees) {
                 </div>
             </div>
             <div class="employee-details">
-                <p><i class="fa-solid fa-phone"></i> ${emp.phone} Ext. ${emp.extension}</p>
+                ${phoneLine}
                 <p><i class="fa-solid fa-envelope"></i> ${emp.email}</p>
             </div>
             <div class="employee-card-footer">
@@ -1306,20 +1344,17 @@ async function openSignatureModal(employee) {
     document.getElementById('modalEmployeeName').textContent = employee.name;
     
     // Reset format selector to default
+    const field = isFieldStaff(employee);
+    setFormatVisible('modalFormatSelect', !field);
     const formatSelect = document.getElementById('modalFormatSelect');
     if (formatSelect) formatSelect.value = 'wellbound';
     refreshModalPersonalLink('wellbound');
     
-    document.getElementById('modalSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    document.getElementById('modalSignaturePreview').innerHTML = field
+        ? ''
+        : '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
     
-    const signatureHtml = await generateSignatureHTML({
-        name: employee.name,
-        title: employee.title,
-        phone: employee.phone,
-        extension: employee.extension,
-        email: employee.email,
-        imageUrl: employee.imageUrl
-    }, 'wellbound');
+    const signatureHtml = await generateSignatureHTML(signaturePayload(employee), 'wellbound');
     
     document.getElementById('modalSignaturePreview').innerHTML = signatureHtml;
 }
@@ -1328,30 +1363,20 @@ async function updateModalSignature() {
     if (!currentModalEmployee) return;
     const format = document.getElementById('modalFormatSelect')?.value || 'wellbound';
     refreshModalPersonalLink(format);
-    document.getElementById('modalSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
-    const signatureHtml = await generateSignatureHTML({
-        name: currentModalEmployee.name,
-        title: currentModalEmployee.title,
-        phone: currentModalEmployee.phone,
-        extension: currentModalEmployee.extension,
-        email: currentModalEmployee.email,
-        imageUrl: currentModalEmployee.imageUrl
-    }, format);
+    document.getElementById('modalSignaturePreview').innerHTML = isFieldStaff(currentModalEmployee)
+        ? ''
+        : '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    const signatureHtml = await generateSignatureHTML(signaturePayload(currentModalEmployee), format);
     document.getElementById('modalSignaturePreview').innerHTML = signatureHtml;
 }
 
 async function updateSearchSignature() {
     if (!currentSearchEmployee) return;
     const format = document.getElementById('searchFormatSelect')?.value || 'wellbound';
-    document.getElementById('searchSignaturePreview').innerHTML = '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
-    const signatureHtml = await generateSignatureHTML({
-        name: currentSearchEmployee.name,
-        title: currentSearchEmployee.title,
-        phone: currentSearchEmployee.phone,
-        extension: currentSearchEmployee.extension,
-        email: currentSearchEmployee.email,
-        imageUrl: currentSearchEmployee.imageUrl
-    }, format);
+    document.getElementById('searchSignaturePreview').innerHTML = isFieldStaff(currentSearchEmployee)
+        ? ''
+        : '<p style="color:#999;text-align:center;padding:40px;">Preparing circular photo...</p>';
+    const signatureHtml = await generateSignatureHTML(signaturePayload(currentSearchEmployee), format);
     document.getElementById('searchSignaturePreview').innerHTML = signatureHtml;
 }
 
@@ -1404,26 +1429,20 @@ async function searchEmployee() {
             document.getElementById('resultName').textContent = emp.name;
             document.getElementById('resultTitle').textContent = emp.title;
             
+            const field = isFieldStaff(emp);
             const resultImg = document.getElementById('resultImage');
-            if (emp.imageUrl) {
+            if (!field && emp.imageUrl) {
                 resultImg.src = emp.imageUrl;
                 resultImg.style.display = 'block';
             } else {
                 resultImg.style.display = 'none';
             }
             
-            // Reset format selector
+            setFormatVisible('searchFormatSelect', !field);
             const searchFormatSelect = document.getElementById('searchFormatSelect');
             if (searchFormatSelect) searchFormatSelect.value = 'wellbound';
             
-            const signatureHtml = await generateSignatureHTML({
-                name: emp.name,
-                title: emp.title,
-                phone: emp.phone,
-                extension: emp.extension,
-                email: emp.email,
-                imageUrl: emp.imageUrl
-            }, 'wellbound');
+            const signatureHtml = await generateSignatureHTML(signaturePayload(emp), 'wellbound');
             
             document.getElementById('searchSignaturePreview').innerHTML = signatureHtml;
             result.style.display = 'block';
@@ -1467,7 +1486,7 @@ async function loadExtensions() {
     try {
         const employees = await loadDirectory();
         const extensions = employees
-            .filter(e => e.extension && String(e.extension).trim())
+            .filter(e => !isFieldStaff(e) && e.extension && String(e.extension).trim())
             .map(e => ({ extension: String(e.extension).trim(), name: e.name, outboundName: e.title || '' }))
             .sort((a, b) => (parseInt(a.extension, 10) || 0) - (parseInt(b.extension, 10) || 0));
         
